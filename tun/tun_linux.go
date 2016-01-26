@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+	"log"
 )
 
 const (
@@ -42,13 +43,16 @@ func createInterface(file *os.File, name string) (string, error) {
 }
 
 func setupInterface(name string, local_ip string) error {
-	err := exec.Command("ip", "link", "set", name, "up").Run()
+	ip_net := net.IPNet{net.ParseIP(local_ip), net.CIDRMask(24, 32)}
+
+	log.Printf("ifconfig %s %s", name, ip_net.String())
+	err = exec.Command("ifconfig", name, ip_net.String()).Run()
 	if err != nil {
 		return err
 	}
 
-	ip_net := net.IPNet{net.ParseIP(local_ip), net.CIDRMask(24, 32)}
-	err = exec.Command("ip", "link", "add", ip_net.String(), "dev", name).Run()
+	log.Printf("ifconfig %s mtu 1500 up", name)
+	err = exec.Command("ifconfig", name, "mtu", "1500", "up").Run()
 	if err != nil {
 		return err
 	}
