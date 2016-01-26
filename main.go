@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"log"
 	"github.com/changlan/mangi/common"
+	"log"
 )
 
 func main() {
@@ -17,22 +17,28 @@ func main() {
 	flag.Parse()
 	switch *mode {
 	case "server":
+		log.Printf("Starting as a server. Port %d", *port)
+		log.Printf("Local LAN IP address: %s", *address)
 		s, err := common.NewServer(*port, *address)
 		if err != nil {
-			log.Fatal(err)
-			return
+			log.Panic(err)
 		}
-		s.Run()
+		err = s.Run()
+		if err != nil {
+			log.Panic(err)
+		}
 	case "client":
+		log.Printf("Starting as a client. Connect to %s:%d", *address, *port)
 		c, err := common.NewClient(*address, *port)
 		if err != nil {
-			log.Fatal(err)
-			return
+			log.Panic(err)
 		}
-		c.Run()
+		err = c.Run()
+		if err != nil {
+			log.Panic(err)
+		}
 	default:
-		log.Fatalf("Invalid mode")
-		return
+		log.Panicf("Invalid mode")
 	}
 	return
 }

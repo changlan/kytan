@@ -1,12 +1,12 @@
 package tun
 
 import (
-	"os"
-	"unsafe"
-	"syscall"
-	"strings"
-	"os/exec"
 	"net"
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
+	"unsafe"
 )
 
 const (
@@ -30,7 +30,11 @@ func createInterface(file *os.File, name string) (string, error) {
 	req.Flags = 0
 	copy(req.Name[:15], name)
 	req.Flags = cIFF_TUN | cIFF_NO_PI
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), uintptr(syscall.TUNSETIFF), uintptr(unsafe.Pointer(&req)))
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL,
+		file.Fd(),
+		uintptr(syscall.TUNSETIFF),
+		uintptr(unsafe.Pointer(&req)),
+	)
 	if err != 0 {
 		return "", err
 	}

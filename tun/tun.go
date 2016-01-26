@@ -1,8 +1,9 @@
 package tun
 
 import (
-	"os"
 	"io"
+	"log"
+	"os"
 )
 
 type TunDevice struct {
@@ -11,20 +12,28 @@ type TunDevice struct {
 }
 
 func NewTun(name string, localip string) (*TunDevice, error) {
+	log.Printf("Opening device %s", name)
 	file, err := openDevice(name)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
+
+	log.Printf("Creating TUN interface %s", name)
 	interface_name, err := createInterface(file, name)
-	if (err != nil) {
+	if err != nil {
 		file.Close()
 		return nil, err
 	}
+
+	log.Printf("Interface %s created", interface_name)
+	log.Printf("Setting up interface %s with %s", interface_name, localip)
+
 	err = setupInterface(interface_name, localip)
-	if (err != nil) {
+	if err != nil {
 		file.Close()
 		return nil, err
 	}
+
 	return &TunDevice{file, interface_name}, nil
 }
 
