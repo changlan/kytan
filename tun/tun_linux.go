@@ -46,7 +46,7 @@ func setupInterface(name string, local_ip string) error {
 	ip_net := net.IPNet{net.ParseIP(local_ip), net.CIDRMask(24, 32)}
 
 	log.Printf("ifconfig %s %s", name, ip_net.String())
-	err = exec.Command("ifconfig", name, ip_net.String()).Run()
+	err := exec.Command("ifconfig", name, ip_net.String()).Run()
 	if err != nil {
 		return err
 	}
