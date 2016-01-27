@@ -51,8 +51,8 @@ func setupInterface(name string, local_ip string) error {
 		return err
 	}
 
-	log.Printf("ifconfig %s mtu 1500 up", name)
-	err = exec.Command("ifconfig", name, "mtu", "1500", "up").Run()
+	log.Printf("ifconfig %s mtu 1400 up", name)
+	err = exec.Command("ifconfig", name, "mtu", "1400", "up").Run()
 	if err != nil {
 		return err
 	}
