@@ -36,6 +36,9 @@ func (c *Client) handleTun(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		pkt, err := c.tun.Read()
+
+		log.Printf("%s -> %s", c.tun.String(), c.conn.RemoteAddr().String())
+
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -74,6 +77,8 @@ func (c *Client) handleUDP(wg *sync.WaitGroup) {
 	for {
 		buf := make([]byte, 1600)
 		n, err := c.conn.Read(buf)
+
+		log.Printf("%s -> %s", c.conn.RemoteAddr().String(), c.tun.String())
 
 		if err != nil {
 			log.Fatal(err)

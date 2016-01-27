@@ -61,3 +61,7 @@ func (tun *TunDevice) Write(packet []byte) error {
 func (tun *TunDevice) Close() error {
 	return tun.file.Close()
 }
+
+func (tun *TunDevice) String() string {
+	return tun.name
+}
