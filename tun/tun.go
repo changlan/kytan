@@ -65,3 +65,9 @@ func (tun *TunDevice) Close() error {
 func (tun *TunDevice) String() string {
 	return tun.name
 }
+
+func (tun *TunDevice) SetDefaultGatewaty() error {
+	gw, err := defaultGateway()
+	log.Printf("Default gateway: %s", gw)
+	return err
+}

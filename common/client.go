@@ -189,6 +189,11 @@ func (c *Client) Run() error {
 		return err
 	}
 
+	err = c.tun.SetDefaultGatewaty()
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 

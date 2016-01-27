@@ -59,3 +59,15 @@ func setupInterface(name string, local_ip string) error {
 
 	return nil
 }
+
+func defaultGateway() (string, error) {
+	cmd := "route -n | awk '{if($4==\"UG\")print $2}'"
+	log.Printf(cmd)
+
+	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}

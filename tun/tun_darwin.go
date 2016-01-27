@@ -35,3 +35,15 @@ func setupInterface(name string, localip string) error {
 
 	return nil
 }
+
+func defaultGateway() (string, error) {
+	cmd := "route -n get default | grep 'gateway' | awk '{print $2}'"
+	log.Printf(cmd)
+
+	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	
+	return string(out), nil
+}
