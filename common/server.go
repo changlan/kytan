@@ -14,18 +14,12 @@ import (
 type Server struct {
 	tun      *tun.TunDevice
 	conn     *net.UDPConn
-	sessions map[uint32]*Session
-	prefix   []byte
-	next_id  byte
+	sessions *Session
+	nat		 *Nat
 }
 
 func NewServer(port int, local_ip string) (*Server, error) {
 	ip := net.ParseIP(local_ip)
-	mask := net.CIDRMask(24, 32)
-	prefix := ip.Mask(mask)
-	if len(prefix) != 4 {
-		return nil, errors.New("Incorrect IP address length")
-	}
 
 	log.Printf("Creating TUN device tun0.")
 	tun, err := tun.NewTun("tun0", local_ip)
@@ -50,9 +44,8 @@ func NewServer(port int, local_ip string) (*Server, error) {
 	return &Server{
 		tun,
 		conn,
-		make(map[uint32]*Session),
-		prefix,
-		2,
+		NewSessions(ip),
+		NewNat(ip),
 	}, nil
 }
 
@@ -67,10 +60,15 @@ func (s *Server) handleTun(wg *sync.WaitGroup) {
 			return
 		}
 
-		dst_ip := pkt[16:20]
-		key := binary.BigEndian.Uint32(dst_ip)
-		session := s.sessions[key]
-		addr := session.addr
+		// TODO: s.nat.ReverseTranslate(pkt)
+
+		dst_ip := binary.BigEndian.Uint32(pkt[16:20])
+		addr, err := s.sessions.Lookup(dst_ip)
+
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
 
 		buffer := new(bytes.Buffer)
 
@@ -138,12 +136,7 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 
 		switch message_type {
 		case Request:
-			ip := s.prefix[:]
-			ip[3] = s.next_id
-			s.next_id++
-
-			key := binary.BigEndian.Uint32(ip)
-			s.sessions[key] = &Session{addr}
+			ip := s.sessions.NewClient(addr)
 
 			buffer := new(bytes.Buffer)
 			err = binary.Write(buffer, binary.BigEndian, Magic)
@@ -158,7 +151,10 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 				return
 			}
 
-			buffer.Write(ip)
+			data := make([]byte, 4)
+			binary.BigEndian.PutUint32(data, ip)
+			buffer.Write(data)
+
 			_, err = s.conn.WriteToUDP(buffer.Bytes(), addr)
 
 			if err != nil {
@@ -167,7 +163,11 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 			}
 
 		case Data:
-			err = s.tun.Write(buf[5:n])
+			pkt := buf[5:n]
+
+			// TODO: s.nat.ForwardTranslate(pkt)
+
+			err = s.tun.Write(pkt)
 			if err != nil {
 				log.Fatal(err)
 				return
