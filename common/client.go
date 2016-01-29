@@ -223,6 +223,7 @@ func (c *Client) Run() error {
 	go c.handleSignal(&wg)
 
 	wg.Wait()
+	c.cleanup()
 
 	return nil
 }
@@ -241,9 +242,6 @@ func (c *Client) handleSignal(wg *sync.WaitGroup) {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-sigs
-
-	log.Printf("%s received. Cleaning up.", sig.String())
-	c.cleanup()
-
+	log.Printf("%s received.", sig.String())
 	wg.Done()
 }

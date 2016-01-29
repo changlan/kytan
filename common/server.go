@@ -26,7 +26,6 @@ func NewServer(port int, local_ip string) (*Server, error) {
 
 	log.Printf("Creating TUN device tun0.")
 	tun, err := tun.NewTun("tun0", local_ip)
-
 	if err != nil {
 		return nil, err
 	}
@@ -193,8 +192,7 @@ func (s *Server) handleSignal(wg *sync.WaitGroup) {
 
 	sig := <-sigs
 
-	log.Printf("%s received. Cleaning up.", sig.String())
-	s.cleanup()
+	log.Printf("%s received.", sig.String())
 
 	wg.Done()
 }
@@ -208,6 +206,7 @@ func (s *Server) Run() error {
 	go s.handleSignal(&wg)
 
 	wg.Wait()
+	s.cleanup()
 
 	return nil
 }
