@@ -21,24 +21,19 @@ func main() {
 		log.Printf("Local LAN IP address: %s", *address)
 		s, err := common.NewServer(*port, *address)
 		if err != nil {
-			log.Panic(err)
+			log.Fatal(err)
 		}
-		err = s.Run()
-		if err != nil {
-			log.Panic(err)
-		}
+		s.Run()
+
 	case "client":
 		log.Printf("Starting as a client. Connect to %s:%d", *address, *port)
 		c, err := common.NewClient(*address, *port)
 		if err != nil {
-			log.Panic(err)
+			log.Fatal(err)
 		}
-		err = c.Run()
-		if err != nil {
-			log.Panic(err)
-		}
+		c.Run()
 	default:
-		log.Panicf("Invalid mode")
+		log.Fatalf("Invalid mode")
 	}
 	return
 }

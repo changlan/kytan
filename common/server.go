@@ -8,10 +8,10 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"sync"
 	"os"
 	"os/signal"
 	"syscall"
+	"fmt"
 )
 
 type Server struct {
@@ -51,14 +51,13 @@ func NewServer(port int, local_ip string) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) handleTun(wg *sync.WaitGroup) {
+func (s *Server) handleTun(err_chan chan error) {
 	defer s.tun.Close()
-	defer wg.Done()
 
 	for {
 		pkt, err := s.tun.Read()
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
@@ -68,7 +67,7 @@ func (s *Server) handleTun(wg *sync.WaitGroup) {
 		addr, err := s.sessions.Lookup(dst_ip)
 
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
@@ -76,13 +75,13 @@ func (s *Server) handleTun(wg *sync.WaitGroup) {
 
 		err = binary.Write(buffer, binary.BigEndian, Magic)
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
 		err = binary.Write(buffer, binary.BigEndian, Data)
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
@@ -90,27 +89,26 @@ func (s *Server) handleTun(wg *sync.WaitGroup) {
 
 		_, err = s.conn.WriteToUDP(buffer.Bytes(), addr)
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 	}
 }
 
-func (s *Server) handleUDP(wg *sync.WaitGroup) {
+func (s *Server) handleUDP(err_chan chan error) {
 	defer s.conn.Close()
-	defer wg.Done()
 
 	for {
 		buf := make([]byte, 2000)
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
 		if n < 5 {
 			err = errors.New("Malformed UDP packet. Length less than 5.")
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
@@ -119,12 +117,12 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 		err = binary.Read(reader, binary.BigEndian, &magic)
 
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
 		if magic != Magic {
-			log.Fatal(errors.New("Malformed UDP packet. Invalid MAGIC."))
+			err_chan <- errors.New("Malformed UDP packet. Invalid MAGIC.")
 			return
 		}
 
@@ -132,7 +130,7 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 		err = binary.Read(reader, binary.BigEndian, &message_type)
 
 		if err != nil {
-			log.Fatal(err)
+			err_chan <- err
 			return
 		}
 
@@ -143,13 +141,13 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 			buffer := new(bytes.Buffer)
 			err = binary.Write(buffer, binary.BigEndian, Magic)
 			if err != nil {
-				log.Fatal(err)
+				err_chan <- err
 				return
 			}
 
 			err = binary.Write(buffer, binary.BigEndian, Accept)
 			if err != nil {
-				log.Fatal(err)
+				err_chan <- err
 				return
 			}
 
@@ -160,7 +158,7 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 			_, err = s.conn.WriteToUDP(buffer.Bytes(), addr)
 
 			if err != nil {
-				log.Fatal(err)
+				err_chan <- err
 				return
 			}
 
@@ -171,11 +169,11 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 
 			err = s.tun.Write(pkt)
 			if err != nil {
-				log.Fatal(err)
+				err_chan <- err
 				return
 			}
 		default:
-			log.Fatal(errors.New("Unknown message type."))
+			err_chan <- errors.New("Unknown message type.")
 			return
 		}
 	}
@@ -186,27 +184,27 @@ func (s *Server) cleanup() {
 	s.conn.Close()
 }
 
-func (s *Server) handleSignal(wg *sync.WaitGroup) {
+func (s *Server) handleSignal(err_chan chan error) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-sigs
 
-	log.Printf("%s received.", sig.String())
+	msg := fmt.Sprintf("%s received.", sig.String())
+	log.Printf(msg)
 
-	wg.Done()
+	err_chan <- errors.New(msg)
 }
 
-func (s *Server) Run() error {
-	var wg sync.WaitGroup
-	wg.Add(1)
+func (s *Server) Run() {
+	err_chan := make(chan error)
 
-	go s.handleTun(&wg)
-	go s.handleUDP(&wg)
-	go s.handleSignal(&wg)
+	go s.handleTun(err_chan)
+	go s.handleUDP(err_chan)
+	go s.handleSignal(err_chan)
 
-	wg.Wait()
+	err := <- err_chan
+	log.Print(err)
+
 	s.cleanup()
-
-	return nil
 }
