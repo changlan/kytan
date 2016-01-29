@@ -32,7 +32,10 @@ func (n *Session) NewClient(tuple *net.UDPAddr) uint32 {
 func (n *Session) Lookup(addr uint32) (*net.UDPAddr, error) {
 	tuple, ok := n.table[addr]
 	if !ok {
-		msg := fmt.Sprintf("No session found for internal IP address: %d", addr)
+		var buf net.IP
+		buf.To4()
+		binary.BigEndian.PutUint32(buf, addr)
+		msg := fmt.Sprintf("No session found for internal IP address: %d", buf.String())
 		return nil, errors.New(msg)
 	}
 	return tuple, nil
