@@ -9,6 +9,9 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type Server struct {
@@ -179,12 +182,30 @@ func (s *Server) handleUDP(wg *sync.WaitGroup) {
 	}
 }
 
+func (s *Server) cleanup() {
+	s.tun.Close()
+	s.conn.Close()
+}
+
+func (s *Server) handleSignal(wg *sync.WaitGroup) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-sigs
+
+	log.Printf("%s received. Cleaning up.", sig.String())
+	s.cleanup()
+
+	wg.Done()
+}
+
 func (s *Server) Run() error {
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
 	go s.handleTun(&wg)
 	go s.handleUDP(&wg)
+	go s.handleSignal(&wg)
 
 	wg.Wait()
 

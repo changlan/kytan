@@ -9,15 +9,21 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"os"
+	"os/signal"
+	"syscall"
+	"github.com/changlan/mangi/util"
 )
 
 type Client struct {
 	tun  *tun.TunDevice
 	conn *net.UDPConn
+	addr *net.UDPAddr
+	gw string
 }
 
-func NewClient(serverip string, port int) (*Client, error) {
-	addr, err := net.ResolveUDPAddr("udp", serverip+":"+strconv.Itoa(port))
+func NewClient(server_name string, port int) (*Client, error) {
+	addr, err := net.ResolveUDPAddr("udp", server_name+":"+strconv.Itoa(port))
 	if err != nil {
 		return nil, err
 	}
@@ -28,6 +34,8 @@ func NewClient(serverip string, port int) (*Client, error) {
 	return &Client{
 		nil,
 		conn,
+		addr,
+		"",
 	}, nil
 }
 
@@ -189,18 +197,53 @@ func (c *Client) Run() error {
 		return err
 	}
 
-	err = c.tun.SetDefaultGatewaty()
+	local_ip[3] = 0x1
+	c.gw, err = util.DefaultGateway()
+	if err != nil {
+		return err
+	}
+	err = util.SetGatewayForHost(c.gw, c.addr.IP.String())
+	if err != nil {
+		return err
+	}
+	err = util.ClearGateway()
+	if err != nil {
+		return err
+	}
+	err = util.SetDefaultGateway(local_ip.String())
 	if err != nil {
 		return err
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
 	go c.handleTun(&wg)
 	go c.handleUDP(&wg)
+	go c.handleSignal(&wg)
 
 	wg.Wait()
 
 	return nil
+}
+
+func (c *Client) cleanup() {
+	c.tun.Close()
+	c.conn.Close()
+
+	util.ClearGateway()
+	util.SetDefaultGateway(c.gw)
+	util.ClearGatewayForHost(c.addr.IP.String())
+}
+
+func (c *Client) handleSignal(wg *sync.WaitGroup) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-sigs
+
+	log.Printf("%s received. Cleaning up.", sig.String())
+	c.cleanup()
+
+	wg.Done()
 }
