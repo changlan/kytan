@@ -2,8 +2,6 @@ package util
 import (
 	"log"
 	"os/exec"
-	"net"
-	"encoding/binary"
 	"fmt"
 )
 
