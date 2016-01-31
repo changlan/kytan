@@ -244,7 +244,7 @@ func (c *Client) init() error {
 
 func (c *Client) Run() {
 	err := c.init()
-	
+
 	if err != nil {
 		log.Fatal(err)
 	}

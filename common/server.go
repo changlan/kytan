@@ -170,7 +170,12 @@ func (s *Server) handleUDP(err_chan chan error) {
 			binary.BigEndian.PutUint32(data, ip)
 			buffer.Write(data)
 
-			_, err = s.conn.WriteToUDP(buffer.Bytes(), addr)
+			data, err = crypto.Encrypt(s.key, buffer.Bytes())
+			if err != nil {
+				return err
+			}
+
+			_, err = s.conn.WriteToUDP(data, addr)
 
 			if err != nil {
 				err_chan <- err
