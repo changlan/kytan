@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"github.com/changlan/mangi/util"
 	"fmt"
+	"github.com/changlan/mangi/crypto"
 )
 
 type Client struct {
@@ -20,9 +21,10 @@ type Client struct {
 	conn *net.UDPConn
 	addr *net.UDPAddr
 	gw string
+	key []byte
 }
 
-func NewClient(server_name string, port int) (*Client, error) {
+func NewClient(server_name string, port int, key []byte) (*Client, error) {
 	addr, err := net.ResolveUDPAddr("udp", server_name+":"+strconv.Itoa(port))
 	if err != nil {
 		return nil, err
@@ -36,6 +38,7 @@ func NewClient(server_name string, port int) (*Client, error) {
 		conn,
 		addr,
 		"",
+		key,
 	}, nil
 }
 
@@ -70,7 +73,14 @@ func (c *Client) handleTun(err_chan chan error) {
 			return
 		}
 
-		_, err = c.conn.Write(buffer.Bytes())
+		data, err := crypto.Encrypt(c.key, buffer.Bytes())
+		if err != nil {
+			err_chan <- err
+			return
+		}
+
+		_, err = c.conn.Write(data)
+
 		if err != nil {
 			err_chan <- err
 			return
@@ -90,9 +100,14 @@ func (c *Client) handleUDP(err_chan chan error) {
 			err_chan <- err
 			return
 		}
-
 		if n < 5 {
 			err = errors.New("Malformed UDP packet. Length less than 5.")
+			err_chan <- err
+			return
+		}
+
+		buf, err = crypto.Decrypt(c.key, buf)
+		if err != nil {
 			err_chan <- err
 			return
 		}

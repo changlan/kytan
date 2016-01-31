@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"syscall"
 	"fmt"
+	"github.com/changlan/mangi/crypto"
 )
 
 type Server struct {
@@ -19,9 +20,10 @@ type Server struct {
 	conn     *net.UDPConn
 	sessions *Session
 	nat		 *Nat
+	key 	 []byte
 }
 
-func NewServer(port int, local_ip string) (*Server, error) {
+func NewServer(port int, local_ip string, key []byte) (*Server, error) {
 	ip := net.ParseIP(local_ip)
 
 	log.Printf("Creating TUN device tun0.")
@@ -48,6 +50,7 @@ func NewServer(port int, local_ip string) (*Server, error) {
 		conn,
 		NewSessions(ip),
 		NewNat(ip),
+		key,
 	}, nil
 }
 
@@ -87,7 +90,14 @@ func (s *Server) handleTun(err_chan chan error) {
 
 		buffer.Write(pkt)
 
-		_, err = s.conn.WriteToUDP(buffer.Bytes(), addr)
+		data, err := crypto.Encrypt(s.key, buffer.Bytes())
+		if err != nil {
+			err_chan <- err
+			return
+		}
+
+		_, err = s.conn.WriteToUDP(data, addr)
+
 		if err != nil {
 			err_chan <- err
 			return
@@ -105,9 +115,14 @@ func (s *Server) handleUDP(err_chan chan error) {
 			err_chan <- err
 			return
 		}
-
 		if n < 5 {
 			err = errors.New("Malformed UDP packet. Length less than 5.")
+			err_chan <- err
+			return
+		}
+
+		buf, err = crypto.Decrypt(s.key, buf)
+		if err != nil {
 			err_chan <- err
 			return
 		}
@@ -168,6 +183,7 @@ func (s *Server) handleUDP(err_chan chan error) {
 			// TODO: s.nat.ForwardTranslate(pkt)
 
 			err = s.tun.Write(pkt)
+
 			if err != nil {
 				err_chan <- err
 				return
