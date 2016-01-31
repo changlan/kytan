@@ -163,7 +163,13 @@ func (c *Client) init() error {
 	}
 
 	log.Printf("Sending request to %s.", c.conn.RemoteAddr().String())
-	_, err = c.conn.Write(buffer.Bytes())
+
+	data, err := crypto.Encrypt(c.key, buffer.Bytes())
+	if err != nil {
+		return err
+	}
+
+	_, err = c.conn.Write(data)
 	if err != nil {
 		return err
 	}
@@ -173,11 +179,16 @@ func (c *Client) init() error {
 	if err != nil {
 		return err
 	}
-
 	log.Printf("Response received.")
 	if n != 4 + 1 + 4 {
 		return errors.New("Incorrect acceptance.")
 	}
+
+	buf, err = crypto.Decrypt(c.key, buf)
+	if err != nil {
+		return err
+	}
+
 	reader := bytes.NewReader(buf)
 
 	var magic uint32
@@ -233,6 +244,7 @@ func (c *Client) init() error {
 
 func (c *Client) Run() {
 	err := c.init()
+	
 	if err != nil {
 		log.Fatal(err)
 	}
