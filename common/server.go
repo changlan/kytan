@@ -172,7 +172,8 @@ func (s *Server) handleUDP(err_chan chan error) {
 
 			data, err = crypto.Encrypt(s.key, buffer.Bytes())
 			if err != nil {
-				return err
+				err_chan <- err
+				return
 			}
 
 			_, err = s.conn.WriteToUDP(data, addr)
