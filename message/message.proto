@@ -1,0 +1,11 @@
+package message;
+
+message Message {
+    enum KIND {
+        REQUEST = 0;
+        ACCEPT = 1;
+        DATA = 2;
+    }
+    required KIND Kind = 1;
+    optional bytes Data = 2;
+}

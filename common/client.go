@@ -1,8 +1,6 @@
 package common
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"github.com/changlan/mangi/tun"
 	"log"
@@ -14,6 +12,8 @@ import (
 	"github.com/changlan/mangi/util"
 	"fmt"
 	"github.com/changlan/mangi/crypto"
+	"github.com/changlan/mangi/message"
+	"github.com/golang/protobuf/proto"
 )
 
 type Client struct {
@@ -53,27 +53,24 @@ func (c *Client) handleTun(err_chan chan error) {
 			err_chan <- err
 			return
 		}
-		buffer := new(bytes.Buffer)
 
-		err = binary.Write(buffer, binary.BigEndian, Magic)
+		msg := &message.Message {
+			Kind: message.Message_DATA.Enum(),
+			Data: pkt,
+		}
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		err = binary.Write(buffer, binary.BigEndian, Data)
+		data, err := proto.Marshal(msg)
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		_, err = buffer.Write(pkt)
-		if err != nil {
-			err_chan <- err
-			return
-		}
+		data, err = crypto.Encrypt(c.key, data)
 
-		data, err := crypto.Encrypt(c.key, buffer.Bytes())
 		if err != nil {
 			err_chan <- err
 			return
@@ -92,16 +89,11 @@ func (c *Client) handleUDP(err_chan chan error) {
 	defer c.conn.Close()
 	for {
 		buf := make([]byte, 1600)
-		n, err := c.conn.Read(buf)
+		_, err := c.conn.Read(buf)
 
 		log.Printf("%s -> %s", c.conn.RemoteAddr().String(), c.tun.String())
 
 		if err != nil {
-			err_chan <- err
-			return
-		}
-		if n < 5 {
-			err = errors.New("Malformed UDP packet. Length less than 5.")
 			err_chan <- err
 			return
 		}
@@ -112,37 +104,16 @@ func (c *Client) handleUDP(err_chan chan error) {
 			return
 		}
 
-		reader := bytes.NewReader(buf)
-		var magic uint32
-		err = binary.Read(reader, binary.BigEndian, &magic)
+		msg := &message.Message{}
+		err = proto.Unmarshal(buf, msg)
 
-		if err != nil {
-			err_chan <- err
-			return
-		}
-
-		if magic != Magic {
-			err = errors.New("Malformed UDP packet. Invalid MAGIC.")
-			err_chan <- err
-			return
-		}
-
-		var message_type uint8
-		err = binary.Read(reader, binary.BigEndian, &message_type)
-
-		if err != nil {
-			err_chan <- err
-			return
-		}
-
-		if message_type != Data {
+		if *msg.Kind != message.Message_DATA {
 			err = errors.New("Unexpected message type.")
 			err_chan <- err
 			return
 		}
 
-		pkt := buf[5:n]
-		err = c.tun.Write(pkt)
+		err = c.tun.Write(msg.Data)
 		if err != nil {
 			err_chan <- err
 			return
@@ -151,20 +122,19 @@ func (c *Client) handleUDP(err_chan chan error) {
 }
 
 func (c *Client) init() error {
-	buffer := new(bytes.Buffer)
-	err := binary.Write(buffer, binary.BigEndian, Magic)
-	if err != nil {
-		return err
+	msg := &message.Message {
+		Kind: message.Message_REQUEST.Enum(),
 	}
 
-	err = binary.Write(buffer, binary.BigEndian, Request)
-	if err != nil {
-		return err
-	}
 
 	log.Printf("Sending request to %s.", c.conn.RemoteAddr().String())
 
-	data, err := crypto.Encrypt(c.key, buffer.Bytes())
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	data, err = crypto.Encrypt(c.key, data)
 	if err != nil {
 		return err
 	}
@@ -175,13 +145,9 @@ func (c *Client) init() error {
 	}
 
 	buf := make([]byte, 1600)
-	n, err := c.conn.Read(buf)
+	_, err = c.conn.Read(buf)
 	if err != nil {
 		return err
-	}
-	log.Printf("Response received.")
-	if n != 4 + 1 + 4 {
-		return errors.New("Incorrect acceptance.")
 	}
 
 	buf, err = crypto.Decrypt(c.key, buf)
@@ -189,33 +155,17 @@ func (c *Client) init() error {
 		return err
 	}
 
-	reader := bytes.NewReader(buf)
+	msg = &message.Message{}
+	err = proto.Unmarshal(buf, msg)
 
-	var magic uint32
-	var message_type uint8
-
-	err = binary.Read(reader, binary.BigEndian, &magic)
-	if err != nil {
-		return err
-	}
-
-	err = binary.Read(reader, binary.BigEndian, &message_type)
-	if err != nil {
-		return err
-	}
-
-	if magic != Magic {
-		return errors.New("Malformed UDP packet. Invalid MAGIC.")
-	}
-
-	if message_type != Accept {
+	if *msg.Kind != message.Message_ACCEPT {
 		return errors.New("Unexpected message type.")
 	}
 
 	var local_ip net.IP
-	local_ip = buf[5:n]
-
+	local_ip = msg.Data
 	log.Printf("Client IP %s assigned.", local_ip.String())
+
 	c.tun, err = tun.NewTun("tun0", local_ip.String())
 	if err != nil {
 		return err

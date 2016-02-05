@@ -1,7 +1,6 @@
 package common
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"github.com/changlan/mangi/tun"
@@ -13,6 +12,8 @@ import (
 	"syscall"
 	"fmt"
 	"github.com/changlan/mangi/crypto"
+	"github.com/changlan/mangi/message"
+	"github.com/golang/protobuf/proto"
 )
 
 type Server struct {
@@ -74,23 +75,19 @@ func (s *Server) handleTun(err_chan chan error) {
 			return
 		}
 
-		buffer := new(bytes.Buffer)
+		msg := &message.Message {
+			Kind: message.Message_DATA.Enum(),
+			Data: pkt,
+		}
 
-		err = binary.Write(buffer, binary.BigEndian, Magic)
+		data, err := proto.Marshal(msg)
+
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		err = binary.Write(buffer, binary.BigEndian, Data)
-		if err != nil {
-			err_chan <- err
-			return
-		}
-
-		buffer.Write(pkt)
-
-		data, err := crypto.Encrypt(s.key, buffer.Bytes())
+		data, err = crypto.Encrypt(s.key, data)
 		if err != nil {
 			err_chan <- err
 			return
@@ -110,13 +107,8 @@ func (s *Server) handleUDP(err_chan chan error) {
 
 	for {
 		buf := make([]byte, 2000)
-		n, addr, err := s.conn.ReadFromUDP(buf)
+		_, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
-			err_chan <- err
-			return
-		}
-		if n < 5 {
-			err = errors.New("Malformed UDP packet. Length less than 5.")
 			err_chan <- err
 			return
 		}
@@ -127,64 +119,45 @@ func (s *Server) handleUDP(err_chan chan error) {
 			return
 		}
 
-		reader := bytes.NewReader(buf)
-		var magic uint32
-		err = binary.Read(reader, binary.BigEndian, &magic)
-
+		msg := &message.Message{}
+		err = proto.Unmarshal(buf, msg)
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		if magic != Magic {
-			err_chan <- errors.New("Malformed UDP packet. Invalid MAGIC.")
-			return
-		}
-
-		var message_type uint8
-		err = binary.Read(reader, binary.BigEndian, &message_type)
-
-		if err != nil {
-			err_chan <- err
-			return
-		}
-
-		switch message_type {
-		case Request:
+		switch *msg.Kind {
+		case message.Message_REQUEST:
 			ip := s.sessions.NewClient(addr)
-
-			buffer := new(bytes.Buffer)
-			err = binary.Write(buffer, binary.BigEndian, Magic)
-			if err != nil {
-				err_chan <- err
-				return
-			}
-
-			err = binary.Write(buffer, binary.BigEndian, Accept)
-			if err != nil {
-				err_chan <- err
-				return
-			}
 
 			data := make([]byte, 4)
 			binary.BigEndian.PutUint32(data, ip)
-			buffer.Write(data)
 
-			data, err = crypto.Encrypt(s.key, buffer.Bytes())
+			msg = &message.Message {
+				Kind: message.Message_ACCEPT.Enum(),
+				Data: data,
+			}
+
+			data, err = proto.Marshal(msg)
+			if err != nil {
+				err_chan <- err
+				return
+			}
+
+			data, err = crypto.Encrypt(s.key, data)
 			if err != nil {
 				err_chan <- err
 				return
 			}
 
 			_, err = s.conn.WriteToUDP(data, addr)
-
 			if err != nil {
 				err_chan <- err
 				return
 			}
 
-		case Data:
-			pkt := buf[5:n]
+		case message.Message_DATA:
+			pkt := msg.Data
 
 			// TODO: s.nat.ForwardTranslate(pkt)
 
@@ -194,6 +167,7 @@ func (s *Server) handleUDP(err_chan chan error) {
 				err_chan <- err
 				return
 			}
+
 		default:
 			err_chan <- errors.New("Unknown message type.")
 			return
