@@ -107,11 +107,12 @@ func (s *Server) handleUDP(err_chan chan error) {
 
 	for {
 		buf := make([]byte, 2000)
-		_, addr, err := s.conn.ReadFromUDP(buf)
+		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
 			err_chan <- err
 			return
 		}
+		buf = buf[:n]
 
 		buf, err = crypto.Decrypt(s.key, buf)
 		if err != nil {

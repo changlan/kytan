@@ -89,7 +89,7 @@ func (c *Client) handleUDP(err_chan chan error) {
 	defer c.conn.Close()
 	for {
 		buf := make([]byte, 1600)
-		_, err := c.conn.Read(buf)
+		n, err := c.conn.Read(buf)
 
 		log.Printf("%s -> %s", c.conn.RemoteAddr().String(), c.tun.String())
 
@@ -97,6 +97,8 @@ func (c *Client) handleUDP(err_chan chan error) {
 			err_chan <- err
 			return
 		}
+
+		buf = buf[:n]
 
 		buf, err = crypto.Decrypt(c.key, buf)
 		if err != nil {
@@ -145,10 +147,11 @@ func (c *Client) init() error {
 	}
 
 	buf := make([]byte, 1600)
-	_, err = c.conn.Read(buf)
+	n, err := c.conn.Read(buf)
 	if err != nil {
 		return err
 	}
+	buf = buf[:n]
 
 	buf, err = crypto.Decrypt(c.key, buf)
 	if err != nil {
