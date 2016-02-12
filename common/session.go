@@ -36,7 +36,7 @@ func (n *Session) Lookup(addr uint32) (*net.UDPAddr, error) {
 		binary.BigEndian.PutUint32(buf, addr)
 		var ip net.IP
 		ip = buf
-		msg := fmt.Sprintf("No session found for internal IP address: %d", ip.String())
+		msg := fmt.Sprintf("No session found for internal IP address: %s", ip.String())
 		return nil, errors.New(msg)
 	}
 	return tuple, nil

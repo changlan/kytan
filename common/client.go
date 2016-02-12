@@ -14,6 +14,7 @@ import (
 	"github.com/changlan/mangi/crypto"
 	"github.com/changlan/mangi/message"
 	"github.com/golang/protobuf/proto"
+	"time"
 )
 
 type Client struct {
@@ -141,17 +142,27 @@ func (c *Client) init() error {
 		return err
 	}
 
-	_, err = c.conn.Write(data)
-	if err != nil {
-		return err
-	}
-
+	handshaked := false
 	buf := make([]byte, 1600)
-	n, err := c.conn.Read(buf)
-	if err != nil {
-		return err
+
+	for !handshaked {
+		_, err = c.conn.Write(data)
+		if err != nil {
+			return err
+		}
+
+		c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := c.conn.Read(buf)
+		c.conn.SetReadDeadline(time.Time{})
+
+		if err != nil {
+			log.Printf("Read error: %v. Reconnecting...", err)
+			continue
+		}
+
+		buf = buf[:n]
+		handshaked = true
 	}
-	buf = buf[:n]
 
 	buf, err = crypto.Decrypt(c.key, buf)
 	if err != nil {
