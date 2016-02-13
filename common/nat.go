@@ -1,21 +1,22 @@
 package common
+
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
-	"encoding/binary"
 )
 
 type Addr struct {
-	protocol uint8
-	source_ip uint32
+	protocol    uint8
+	source_ip   uint32
 	source_port uint16
 }
 
 type Nat struct {
-	addr uint32
-	forward map[Addr]uint16
-	reverse map[uint16]*Addr
+	addr      uint32
+	forward   map[Addr]uint16
+	reverse   map[uint16]*Addr
 	next_port uint16
 }
 
@@ -46,7 +47,7 @@ func (n *Nat) ForwardTranslate(pkt []byte) ([]byte, error) {
 	protocol := pkt[9]
 	switch protocol {
 	case 0x06, 0x11:
-		port_src := binary.BigEndian.Uint16(pkt[length:length+2])
+		port_src := binary.BigEndian.Uint16(pkt[length : length+2])
 		tuple := Addr{protocol, ip_src, port_src}
 
 		ip_ext := n.addr
@@ -61,7 +62,7 @@ func (n *Nat) ForwardTranslate(pkt []byte) ([]byte, error) {
 	default:
 		// TODO: Other cases
 	}
-	return pkt, nil;
+	return pkt, nil
 }
 
 func (n *Nat) ReverseLookup(port uint16) (*Addr, error) {
@@ -75,5 +76,5 @@ func (n *Nat) ReverseLookup(port uint16) (*Addr, error) {
 
 func (n *Nat) ReverseTranslate(pkt []byte) ([]byte, error) {
 	// TODO: Implement this
-	return pkt, nil;
+	return pkt, nil
 }

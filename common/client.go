@@ -2,18 +2,18 @@ package common
 
 import (
 	"errors"
-	"github.com/changlan/mangi/tun"
-	"log"
-	"net"
-	"strconv"
-	"os"
-	"os/signal"
-	"syscall"
-	"github.com/changlan/mangi/util"
 	"fmt"
 	"github.com/changlan/mangi/crypto"
 	"github.com/changlan/mangi/message"
+	"github.com/changlan/mangi/tun"
+	"github.com/changlan/mangi/util"
 	"github.com/golang/protobuf/proto"
+	"log"
+	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -21,8 +21,8 @@ type Client struct {
 	tun  *tun.TunDevice
 	conn *net.UDPConn
 	addr *net.UDPAddr
-	gw string
-	key []byte
+	gw   string
+	key  []byte
 }
 
 func NewClient(server_name string, port int, key []byte) (*Client, error) {
@@ -55,7 +55,7 @@ func (c *Client) handleTun(err_chan chan error) {
 			return
 		}
 
-		msg := &message.Message {
+		msg := &message.Message{
 			Kind: message.Message_DATA.Enum(),
 			Data: pkt,
 		}
@@ -125,10 +125,9 @@ func (c *Client) handleUDP(err_chan chan error) {
 }
 
 func (c *Client) init() error {
-	msg := &message.Message {
+	msg := &message.Message{
 		Kind: message.Message_REQUEST.Enum(),
 	}
-
 
 	log.Printf("Sending request to %s.", c.conn.RemoteAddr().String())
 
@@ -219,7 +218,7 @@ func (c *Client) Run() {
 	go c.handleUDP(err_chan)
 	go c.handleSignal(err_chan)
 
-	err = <- err_chan
+	err = <-err_chan
 	log.Print(err)
 
 	c.cleanup()

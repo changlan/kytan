@@ -1,12 +1,13 @@
 package crypto
 
 import (
-	"crypto/sha256"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/sha256"
 )
 
 var iv = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
+
 const key_len = 32
 
 func GenerateKey(key string) []byte {
@@ -35,6 +36,3 @@ func Decrypt(key []byte, data []byte) ([]byte, error) {
 	cfb_dec.XORKeyStream(result, data)
 	return result, nil
 }
-
-
-

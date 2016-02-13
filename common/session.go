@@ -1,20 +1,20 @@
 package common
 
 import (
-	"net"
-	"fmt"
-	"errors"
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"net"
 )
 
 type Session struct {
-	addr uint32
-	table map[uint32]*net.UDPAddr
+	addr      uint32
+	table     map[uint32]*net.UDPAddr
 	next_addr uint8
 }
 
 func NewSessions(addr net.IP) *Session {
-	return &Session {
+	return &Session{
 		binary.BigEndian.Uint32(addr.To4()),
 		make(map[uint32]*net.UDPAddr),
 		2,
@@ -22,7 +22,7 @@ func NewSessions(addr net.IP) *Session {
 }
 
 func (n *Session) NewClient(tuple *net.UDPAddr) uint32 {
-	result := n.addr & 0xffffff00 | uint32(n.next_addr)
+	result := n.addr&0xffffff00 | uint32(n.next_addr)
 	n.next_addr++
 
 	n.table[result] = tuple

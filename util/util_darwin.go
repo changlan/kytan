@@ -1,8 +1,9 @@
 package util
+
 import (
+	"fmt"
 	"log"
 	"os/exec"
-	"fmt"
 )
 
 func cmd(cmdline string) (string, error) {

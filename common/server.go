@@ -3,25 +3,25 @@ package common
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/changlan/mangi/tun"
-	"log"
-	"net"
-	"strconv"
-	"os"
-	"os/signal"
-	"syscall"
 	"fmt"
 	"github.com/changlan/mangi/crypto"
 	"github.com/changlan/mangi/message"
+	"github.com/changlan/mangi/tun"
 	"github.com/golang/protobuf/proto"
+	"log"
+	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
 )
 
 type Server struct {
 	tun      *tun.TunDevice
 	conn     *net.UDPConn
 	sessions *Session
-	nat		 *Nat
-	key 	 []byte
+	nat      *Nat
+	key      []byte
 }
 
 func NewServer(port int, local_ip string, key []byte) (*Server, error) {
@@ -75,7 +75,7 @@ func (s *Server) handleTun(err_chan chan error) {
 			return
 		}
 
-		msg := &message.Message {
+		msg := &message.Message{
 			Kind: message.Message_DATA.Enum(),
 			Data: pkt,
 		}
@@ -134,7 +134,7 @@ func (s *Server) handleUDP(err_chan chan error) {
 			data := make([]byte, 4)
 			binary.BigEndian.PutUint32(data, ip)
 
-			msg = &message.Message {
+			msg = &message.Message{
 				Kind: message.Message_ACCEPT.Enum(),
 				Data: data,
 			}
@@ -200,7 +200,7 @@ func (s *Server) Run() {
 	go s.handleUDP(err_chan)
 	go s.handleSignal(err_chan)
 
-	err := <- err_chan
+	err := <-err_chan
 	log.Print(err)
 
 	s.cleanup()

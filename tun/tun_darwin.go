@@ -1,9 +1,9 @@
 package tun
 
 import (
-	"os"
-	"net"
 	"log"
+	"net"
+	"os"
 	"os/exec"
 )
 

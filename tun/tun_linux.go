@@ -1,13 +1,13 @@
 package tun
 
 import (
+	"log"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
-	"log"
 )
 
 const (

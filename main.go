@@ -2,40 +2,74 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/changlan/mangi/common"
-	"log"
 	"github.com/changlan/mangi/crypto"
+	"log"
+	"math/rand"
+	"time"
 )
 
-func main() {
+type Config struct {
+	// Common
+	Mode   string
+	Secret string
+
+	// Server
+	BindPort int
+
+	// Client
+	RemoteIP   string
+	RemotePort int
+}
+
+func parseFlags() *Config {
 	mode := flag.String("mode", "client", "Mode: client or server")
-	address := flag.String("addr",
-		"192.168.88.1",
-		"Client mode: server IP address / Server mode: gateway virtual IP address",
-	)
-	port := flag.Int("port", 8964, "UDP port")
 	secret := flag.String("secret", "default", "Secret Key")
+
+	bindPort := flag.Int("bind", 8964, "UDP port for incoming connections")
+
+	remoteIP := flag.String("addr", "8.8.8.8", "Server IP")
+	remotePort := flag.Int("port", 8964, "Server UDP port")
 
 	flag.Parse()
 
-	key := crypto.GenerateKey(*secret)
+	return &Config{
+		*mode,
+		*secret,
+		*bindPort,
+		*remoteIP,
+		*remotePort,
+	}
+}
 
-	switch *mode {
+func main() {
+	config := parseFlags()
+	key := crypto.GenerateKey(config.Secret)
+
+	switch config.Mode {
 	case "server":
-		log.Printf("Starting as a server. Port %d", *port)
-		log.Printf("Local LAN IP address: %s", *address)
-		s, err := common.NewServer(*port, *address, key)
+		rand.Seed(time.Now().UTC().UnixNano())
+		localIP := fmt.Sprintf("10.%d.%d.1", rand.Intn(256), rand.Intn(256))
+
+		log.Printf("Starting as a server. Port %d", config.BindPort)
+		log.Printf("Local LAN IP address: %s", localIP)
+
+		s, err := common.NewServer(config.BindPort, localIP, key)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		s.Run()
 
 	case "client":
-		log.Printf("Starting as a client. Connect to %s:%d", *address, *port)
-		c, err := common.NewClient(*address, *port, key)
+		log.Printf("Starting as a client. Connect to %s:%d", config.RemoteIP, config.RemotePort)
+
+		c, err := common.NewClient(config.RemoteIP, config.RemotePort, key)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		c.Run()
 	default:
 		log.Fatalf("Invalid mode")
