@@ -5,6 +5,14 @@ and deployment with a goal of multi-platform support.
 
 Currently, `mangi` can run on Linux as the server, and run on both Linux and Mac OS X as the client.
 
+Usage
+-----
+
+Build:
+
+    go get github.com/changlan/mangi
+    go build github.com/changlan/mangi
+
 Run as a server:
 
     mangi -mode=server -bind=<PORT> -secret=<SECRET>
