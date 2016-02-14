@@ -1,5 +1,8 @@
 mangi
 =====
+
+[![Build Status](https://travis-ci.org/changlan/mangi.svg?branch=master)](https://travis-ci.org/changlan/mangi)
+
 `mangi` is a peer to peer VPN written in Golang. It is designed to minimize the hassle of configuration
 and deployment with a goal of multi-platform support.
 
