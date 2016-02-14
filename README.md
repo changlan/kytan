@@ -19,7 +19,7 @@ If run as a server, make sure IP forwarding and NAT are enabled:
     # Assuming the external interface is eth0
     iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE 
 
-Run as a server (Make sure IP forwarding is enabled):
+Run as a server:
 
     mangi -mode=server -bind=<PORT> -secret=<SECRET>
     
