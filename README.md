@@ -13,7 +13,13 @@ Build:
     go get github.com/changlan/mangi
     go build github.com/changlan/mangi
 
-Run as a server:
+If run as a server, make sure IP forwarding and NAT are enabled:
+
+    sysctl -w net.ipv4.ip_forward=1
+    # Assuming the external interface is eth0
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE 
+
+Run as a server (Make sure IP forwarding is enabled):
 
     mangi -mode=server -bind=<PORT> -secret=<SECRET>
     
