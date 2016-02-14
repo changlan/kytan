@@ -17,6 +17,7 @@ import (
 )
 
 type Server struct {
+	dev_name string
 	tun      *tun.TunDevice
 	conn     *net.UDPConn
 	sessions *Session
@@ -24,11 +25,11 @@ type Server struct {
 	key      []byte
 }
 
-func NewServer(port int, local_ip string, key []byte) (*Server, error) {
+func NewServer(port int, local_ip string, key []byte, dev_name string) (*Server, error) {
 	ip := net.ParseIP(local_ip)
 
-	log.Printf("Creating TUN device tun0.")
-	tun, err := tun.NewTun("tun0", local_ip)
+	log.Printf("Creating TUN device %s.", dev_name)
+	tun, err := tun.NewTun(dev_name, local_ip)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +48,7 @@ func NewServer(port int, local_ip string, key []byte) (*Server, error) {
 	}
 
 	return &Server{
+		dev_name,
 		tun,
 		conn,
 		NewSessions(ip),

@@ -55,7 +55,7 @@ func main() {
 		log.Printf("Starting as a server. Port %d", config.BindPort)
 		log.Printf("Local LAN IP address: %s", localIP)
 
-		s, err := common.NewServer(config.BindPort, localIP, key)
+		s, err := common.NewServer(config.BindPort, localIP, key, "tun0")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func main() {
 	case "client":
 		log.Printf("Starting as a client. Connect to %s:%d", config.RemoteIP, config.RemotePort)
 
-		c, err := common.NewClient(config.RemoteIP, config.RemotePort, key)
+		c, err := common.NewClient(config.RemoteIP, config.RemotePort, key, "tun0")
 		if err != nil {
 			log.Fatal(err)
 		}

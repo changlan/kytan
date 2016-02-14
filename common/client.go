@@ -18,6 +18,7 @@ import (
 )
 
 type Client struct {
+	dev_name string
 	tun  *tun.TunDevice
 	conn *net.UDPConn
 	addr *net.UDPAddr
@@ -25,7 +26,7 @@ type Client struct {
 	key  []byte
 }
 
-func NewClient(server_name string, port int, key []byte) (*Client, error) {
+func NewClient(server_name string, port int, key []byte, dev_name string) (*Client, error) {
 	addr, err := net.ResolveUDPAddr("udp", server_name+":"+strconv.Itoa(port))
 	if err != nil {
 		return nil, err
@@ -35,6 +36,7 @@ func NewClient(server_name string, port int, key []byte) (*Client, error) {
 	conn, err := net.DialUDP("udp", nil, addr)
 
 	return &Client{
+		dev_name,
 		nil,
 		conn,
 		addr,
@@ -179,7 +181,7 @@ func (c *Client) init() error {
 	local_ip = msg.Data
 	log.Printf("Client IP %s assigned.", local_ip.String())
 
-	c.tun, err = tun.NewTun("tun0", local_ip.String())
+	c.tun, err = tun.NewTun(c.dev_name, local_ip.String())
 	if err != nil {
 		return err
 	}
