@@ -61,10 +61,6 @@ func (c *Client) handleTun(err_chan chan error) {
 			Kind: message.Message_DATA.Enum(),
 			Data: pkt,
 		}
-		if err != nil {
-			err_chan <- err
-			return
-		}
 
 		data, err := proto.Marshal(msg)
 		if err != nil {
@@ -73,14 +69,12 @@ func (c *Client) handleTun(err_chan chan error) {
 		}
 
 		data, err = crypto.Encrypt(c.key, data)
-
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
 		_, err = c.conn.Write(data)
-
 		if err != nil {
 			err_chan <- err
 			return
@@ -92,18 +86,15 @@ func (c *Client) handleUDP(err_chan chan error) {
 	defer c.conn.Close()
 	for {
 		buf := make([]byte, 1600)
+
 		n, err := c.conn.Read(buf)
-
 		log.Printf("%s -> %s", c.conn.RemoteAddr().String(), c.tun.String())
-
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		buf = buf[:n]
-
-		buf, err = crypto.Decrypt(c.key, buf)
+		buf, err = crypto.Decrypt(c.key, buf[:n])
 		if err != nil {
 			err_chan <- err
 			return
@@ -111,6 +102,11 @@ func (c *Client) handleUDP(err_chan chan error) {
 
 		msg := &message.Message{}
 		err = proto.Unmarshal(buf, msg)
+
+		if err != nil {
+			err_chan <- err
+			return
+		}
 
 		if *msg.Kind != message.Message_DATA {
 			err = errors.New("Unexpected message type.")
@@ -143,10 +139,10 @@ func (c *Client) init() error {
 		return err
 	}
 
-	handshaked := false
+	success := false
 	buf := make([]byte, 1600)
 
-	for !handshaked {
+	for !success {
 		_, err = c.conn.Write(data)
 		if err != nil {
 			return err
@@ -162,7 +158,7 @@ func (c *Client) init() error {
 		}
 
 		buf = buf[:n]
-		handshaked = true
+		success = true
 	}
 
 	buf, err = crypto.Decrypt(c.key, buf)
