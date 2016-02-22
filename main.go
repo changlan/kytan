@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"time"
+	"os"
 )
 
 type Config struct {
@@ -43,7 +44,15 @@ func parseFlags() *Config {
 	}
 }
 
+func isRoot() bool {
+	return os.Geteuid() == 0
+}
+
 func main() {
+	if !isRoot() {
+		log.Fatalf("mangi must be run as root.")
+	}
+
 	config := parseFlags()
 	key := crypto.GenerateKey(config.Secret)
 
