@@ -2,6 +2,7 @@ kytan
 =====
 
 [![Build Status](https://travis-ci.org/changlan/kytan.svg?branch=master)](https://travis-ci.org/changlan/kytan)
+[![Coverage Status](https://coveralls.io/repos/github/changlan/kytan/badge.svg?branch=master)](https://coveralls.io/github/changlan/kytan?branch=master)
 
 `kytan` is a peer to peer VPN written in Golang. It is designed to minimize the hassle of configuration
 and deployment with a goal of multi-platform support.
