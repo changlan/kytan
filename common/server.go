@@ -17,19 +17,17 @@ import (
 )
 
 type Server struct {
-	dev_name string
-	tun      *tun.TunDevice
-	conn     *net.UDPConn
-	sessions *Session
-	nat      *Nat
-	key      []byte
+	device             *tun.TunDevice
+	listenerConnection *net.UDPConn
+	sessionTable       *SessionTable
+	secretKey          []byte
 }
 
-func NewServer(port int, local_ip string, key []byte, dev_name string) (*Server, error) {
+func NewServer(port int, local_ip string, key []byte) (*Server, error) {
 	ip := net.ParseIP(local_ip)
 
-	log.Printf("Creating TUN device %s.", dev_name)
-	tun, err := tun.NewTun(dev_name, local_ip)
+	log.Printf("Creating TUN device")
+	tun, err := tun.NewTun("tun0", local_ip)
 	if err != nil {
 		return nil, err
 	}
@@ -48,29 +46,25 @@ func NewServer(port int, local_ip string, key []byte, dev_name string) (*Server,
 	}
 
 	return &Server{
-		dev_name,
 		tun,
 		conn,
-		NewSessions(ip),
-		NewNat(ip),
+		NewSessionTable(ip),
 		key,
 	}, nil
 }
 
 func (s *Server) handleTun(err_chan chan error) {
-	defer s.tun.Close()
+	defer s.device.Close()
 
 	for {
-		pkt, err := s.tun.Read()
+		pkt, err := s.device.Read()
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		// TODO: s.nat.ReverseTranslate(pkt)
-
 		dst_ip := binary.BigEndian.Uint32(pkt[16:20])
-		addr, err := s.sessions.Lookup(dst_ip)
+		addr, err := s.sessionTable.Lookup(dst_ip)
 
 		if err != nil {
 			err_chan <- err
@@ -89,13 +83,13 @@ func (s *Server) handleTun(err_chan chan error) {
 			return
 		}
 
-		data, err = crypto.Encrypt(s.key, data)
+		data, err = crypto.Encrypt(s.secretKey, data)
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		_, err = s.conn.WriteToUDP(data, addr)
+		_, err = s.listenerConnection.WriteToUDP(data, addr)
 
 		if err != nil {
 			err_chan <- err
@@ -105,18 +99,18 @@ func (s *Server) handleTun(err_chan chan error) {
 }
 
 func (s *Server) handleUDP(err_chan chan error) {
-	defer s.conn.Close()
+	defer s.listenerConnection.Close()
 
 	for {
 		buf := make([]byte, 2000)
-		n, addr, err := s.conn.ReadFromUDP(buf)
+		n, addr, err := s.listenerConnection.ReadFromUDP(buf)
 		if err != nil {
 			err_chan <- err
 			return
 		}
 		buf = buf[:n]
 
-		buf, err = crypto.Decrypt(s.key, buf)
+		buf, err = crypto.Decrypt(s.secretKey, buf)
 		if err != nil {
 			err_chan <- err
 			return
@@ -131,7 +125,7 @@ func (s *Server) handleUDP(err_chan chan error) {
 
 		switch *msg.Kind {
 		case message.Message_REQUEST:
-			ip := s.sessions.NewClient(addr)
+			ip := s.sessionTable.NewClient(addr)
 
 			data := make([]byte, 4)
 			binary.BigEndian.PutUint32(data, ip)
@@ -147,13 +141,13 @@ func (s *Server) handleUDP(err_chan chan error) {
 				return
 			}
 
-			data, err = crypto.Encrypt(s.key, data)
+			data, err = crypto.Encrypt(s.secretKey, data)
 			if err != nil {
 				err_chan <- err
 				return
 			}
 
-			_, err = s.conn.WriteToUDP(data, addr)
+			_, err = s.listenerConnection.WriteToUDP(data, addr)
 			if err != nil {
 				err_chan <- err
 				return
@@ -162,9 +156,7 @@ func (s *Server) handleUDP(err_chan chan error) {
 		case message.Message_DATA:
 			pkt := msg.Data
 
-			// TODO: s.nat.ForwardTranslate(pkt)
-
-			err = s.tun.Write(pkt)
+			err = s.device.Write(pkt)
 
 			if err != nil {
 				err_chan <- err
@@ -179,8 +171,8 @@ func (s *Server) handleUDP(err_chan chan error) {
 }
 
 func (s *Server) cleanup() {
-	s.tun.Close()
-	s.conn.Close()
+	s.device.Close()
+	s.listenerConnection.Close()
 }
 
 func (s *Server) handleSignal(err_chan chan error) {

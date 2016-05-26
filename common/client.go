@@ -18,15 +18,14 @@ import (
 )
 
 type Client struct {
-	dev_name string
-	tun  *tun.TunDevice
-	conn *net.UDPConn
-	addr *net.UDPAddr
-	gw   string
-	key  []byte
+	device           *tun.TunDevice
+	serverConnection *net.UDPConn
+	serverAddress    string
+	gatewayAddress   string
+	secretKey        []byte
 }
 
-func NewClient(server_name string, port int, key []byte, dev_name string) (*Client, error) {
+func NewClient(server_name string, port int, key []byte) (*Client, error) {
 	addr, err := net.ResolveUDPAddr("udp", server_name+":"+strconv.Itoa(port))
 	if err != nil {
 		return nil, err
@@ -36,21 +35,20 @@ func NewClient(server_name string, port int, key []byte, dev_name string) (*Clie
 	conn, err := net.DialUDP("udp", nil, addr)
 
 	return &Client{
-		dev_name,
 		nil,
 		conn,
-		addr,
+		addr.IP.String(),
 		"",
 		key,
 	}, nil
 }
 
 func (c *Client) handleTun(err_chan chan error) {
-	defer c.tun.Close()
+	defer c.device.Close()
 	for {
-		pkt, err := c.tun.Read()
+		pkt, err := c.device.Read()
 
-		log.Printf("%s -> %s", c.tun.String(), c.conn.RemoteAddr().String())
+		log.Printf("%s -> %s", c.device.String(), c.serverConnection.RemoteAddr().String())
 
 		if err != nil {
 			err_chan <- err
@@ -68,13 +66,13 @@ func (c *Client) handleTun(err_chan chan error) {
 			return
 		}
 
-		data, err = crypto.Encrypt(c.key, data)
+		data, err = crypto.Encrypt(c.secretKey, data)
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		_, err = c.conn.Write(data)
+		_, err = c.serverConnection.Write(data)
 		if err != nil {
 			err_chan <- err
 			return
@@ -83,18 +81,18 @@ func (c *Client) handleTun(err_chan chan error) {
 }
 
 func (c *Client) handleUDP(err_chan chan error) {
-	defer c.conn.Close()
+	defer c.serverConnection.Close()
 	for {
 		buf := make([]byte, 1600)
 
-		n, err := c.conn.Read(buf)
-		log.Printf("%s -> %s", c.conn.RemoteAddr().String(), c.tun.String())
+		n, err := c.serverConnection.Read(buf)
+		log.Printf("%s -> %s", c.serverConnection.RemoteAddr().String(), c.device.String())
 		if err != nil {
 			err_chan <- err
 			return
 		}
 
-		buf, err = crypto.Decrypt(c.key, buf[:n])
+		buf, err = crypto.Decrypt(c.secretKey, buf[:n])
 		if err != nil {
 			err_chan <- err
 			return
@@ -114,7 +112,7 @@ func (c *Client) handleUDP(err_chan chan error) {
 			return
 		}
 
-		err = c.tun.Write(msg.Data)
+		err = c.device.Write(msg.Data)
 		if err != nil {
 			err_chan <- err
 			return
@@ -127,14 +125,14 @@ func (c *Client) init() error {
 		Kind: message.Message_REQUEST.Enum(),
 	}
 
-	log.Printf("Sending request to %s.", c.conn.RemoteAddr().String())
+	log.Printf("Sending request to %s.", c.serverConnection.RemoteAddr().String())
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	data, err = crypto.Encrypt(c.key, data)
+	data, err = crypto.Encrypt(c.secretKey, data)
 	if err != nil {
 		return err
 	}
@@ -143,14 +141,14 @@ func (c *Client) init() error {
 	buf := make([]byte, 1600)
 
 	for !success {
-		_, err = c.conn.Write(data)
+		_, err = c.serverConnection.Write(data)
 		if err != nil {
 			return err
 		}
 
-		c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		n, err := c.conn.Read(buf)
-		c.conn.SetReadDeadline(time.Time{})
+		c.serverConnection.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := c.serverConnection.Read(buf)
+		c.serverConnection.SetReadDeadline(time.Time{})
 
 		if err != nil {
 			log.Printf("Read error: %v. Reconnecting...", err)
@@ -161,7 +159,7 @@ func (c *Client) init() error {
 		success = true
 	}
 
-	buf, err = crypto.Decrypt(c.key, buf)
+	buf, err = crypto.Decrypt(c.secretKey, buf)
 	if err != nil {
 		return err
 	}
@@ -177,17 +175,17 @@ func (c *Client) init() error {
 	local_ip = msg.Data
 	log.Printf("Client IP %s assigned.", local_ip.String())
 
-	c.tun, err = tun.NewTun(c.dev_name, local_ip.String())
+	c.device, err = tun.NewTun("tun0", local_ip.String())
 	if err != nil {
 		return err
 	}
 
 	local_ip[3] = 0x1
-	c.gw, err = util.DefaultGateway()
+	c.gatewayAddress, err = util.DefaultGateway()
 	if err != nil {
 		return err
 	}
-	err = util.SetGatewayForHost(c.gw, c.addr.IP.String())
+	err = util.SetGatewayForHost(c.gatewayAddress, c.serverAddress)
 	if err != nil {
 		return err
 	}
@@ -223,12 +221,12 @@ func (c *Client) Run() {
 }
 
 func (c *Client) cleanup() {
-	c.tun.Close()
-	c.conn.Close()
+	c.device.Close()
+	c.serverConnection.Close()
 
 	util.ClearGateway()
-	util.SetDefaultGateway(c.gw)
-	util.ClearGatewayForHost(c.addr.IP.String())
+	util.SetDefaultGateway(c.gatewayAddress)
+	util.ClearGatewayForHost(c.serverAddress)
 }
 
 func (c *Client) handleSignal(err_chan chan error) {

@@ -7,21 +7,21 @@ import (
 	"net"
 )
 
-type Session struct {
+type SessionTable struct {
 	addr      uint32
 	table     map[uint32]*net.UDPAddr
 	next_addr uint8
 }
 
-func NewSessions(addr net.IP) *Session {
-	return &Session{
+func NewSessionTable(addr net.IP) *SessionTable {
+	return &SessionTable{
 		binary.BigEndian.Uint32(addr.To4()),
 		make(map[uint32]*net.UDPAddr),
 		2,
 	}
 }
 
-func (n *Session) NewClient(tuple *net.UDPAddr) uint32 {
+func (n *SessionTable) NewClient(tuple *net.UDPAddr) uint32 {
 	result := n.addr&0xffffff00 | uint32(n.next_addr)
 	n.next_addr++
 
@@ -29,7 +29,7 @@ func (n *Session) NewClient(tuple *net.UDPAddr) uint32 {
 	return result
 }
 
-func (n *Session) Lookup(addr uint32) (*net.UDPAddr, error) {
+func (n *SessionTable) Lookup(addr uint32) (*net.UDPAddr, error) {
 	tuple, ok := n.table[addr]
 	if !ok {
 		buf := make([]byte, 4)
