@@ -27,7 +27,7 @@ func NewServer(port int, local_ip string, key []byte) (*Server, error) {
 	ip := net.ParseIP(local_ip)
 
 	log.Printf("Creating TUN device")
-	tun, err := tun.NewTun("tun0", local_ip)
+	tun, err := tun.NewTun(DeviceNameServer, local_ip)
 	if err != nil {
 		return nil, err
 	}

@@ -175,7 +175,7 @@ func (c *Client) init() error {
 	local_ip = msg.Data
 	log.Printf("Client IP %s assigned.", local_ip.String())
 
-	c.device, err = tun.NewTun("tun0", local_ip.String())
+	c.device, err = tun.NewTun(DeviceNameClient, local_ip.String())
 	if err != nil {
 		return err
 	}
