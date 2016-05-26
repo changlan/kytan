@@ -1,4 +1,4 @@
-mangi
+kytan
 =====
 
 [![Build Status](https://travis-ci.org/changlan/kytan.svg?branch=master)](https://travis-ci.org/changlan/kytan)
