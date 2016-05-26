@@ -1,20 +1,20 @@
 mangi
 =====
 
-[![Build Status](https://travis-ci.org/changlan/mangi.svg?branch=master)](https://travis-ci.org/changlan/mangi)
+[![Build Status](https://travis-ci.org/changlan/kytan.svg?branch=master)](https://travis-ci.org/changlan/kytan)
 
-`mangi` is a peer to peer VPN written in Golang. It is designed to minimize the hassle of configuration
+`kytan` is a peer to peer VPN written in Golang. It is designed to minimize the hassle of configuration
 and deployment with a goal of multi-platform support.
 
-Currently, `mangi` can run on Linux as the server, and run on both Linux and Mac OS X as the client.
+Currently, `kytan` can run on Linux as the server, and run on both Linux and Mac OS X as the client.
 
 Usage
 -----
 
 Build:
 
-    go get github.com/changlan/mangi
-    go build github.com/changlan/mangi
+    go get github.com/changlan/kytan
+    go build github.com/changlan/kytan
 
 If run as a server, make sure IP forwarding and NAT are enabled:
 
@@ -24,18 +24,10 @@ If run as a server, make sure IP forwarding and NAT are enabled:
 
 Run as a server:
 
-    mangi -mode=server -bind=<PORT> -secret=<SECRET>
+    kytan -mode=server -bind=<PORT> -secret=<SECRET>
     
 Run as a client:
 
-    mangi -mode=client -addr=<SERVER_IP> -port=<SERVER_PORT> -secret=<SECRET>
+    kytan -mode=client -addr=<SERVER_IP> -port=<SERVER_PORT> -secret=<SECRET>
     
 `SECRET` can be any string.
-
-Fun fact
---------
-The word "mangi" was used to refer to Southern China by the Mongols and North Chinese as derogation 
-(蛮子, southern barbarians). The word also reached the Western world as Marco Polo recorded it in his
-famous book. However, while the North Chinese was vainly placing their bet on the Great Wall for 
-defending against nomadic invasions, "mangi" began their expedition to the South China Sea and 
-established several settlements in the Malay Archipelago.

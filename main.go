@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/changlan/mangi/common"
-	"github.com/changlan/mangi/crypto"
+	"github.com/changlan/kytan/common"
+	"github.com/changlan/kytan/crypto"
 	"log"
 	"math/rand"
 	"time"
