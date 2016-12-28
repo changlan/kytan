@@ -16,8 +16,6 @@ mod tuntap;
 use std::env;
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
-use std::io::Write;
-use std::io::Read;
 use std::net::SocketAddr;
 use getopts::Options;
 use tuntap::*;

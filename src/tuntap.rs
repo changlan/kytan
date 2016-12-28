@@ -1,21 +1,38 @@
-use std::{fs, path, process, io, mem};
+use std::{fs, process, io, mem};
 use libc;
-use libc::{c_int, c_ulong, c_short, socklen_t};
+use libc::{c_int, c_ulong, socklen_t};
 use std::os::unix::io::{RawFd, AsRawFd, FromRawFd};
 use std::io::{Write, Read};
 use byteorder::{BigEndian, WriteBytesExt};
 
+#[cfg(target_os = "linux")]
+use libc::c_short;
+#[cfg(target_os = "linux")]
+use std::path;
+#[cfg(target_os = "linux")]
 const IFNAMSIZ: usize = 16;
+#[cfg(target_os = "linux")]
 const IFF_TUN: c_short = 0x0001;
+#[cfg(target_os = "linux")]
 const IFF_TAP: c_short = 0x0002;
+#[cfg(target_os = "linux")]
 const IFF_NO_PI: c_short = 0x1000;
+#[cfg(target_os = "linux")]
 const TUNSETIFF: c_ulong = 0x400454ca;
+
+#[cfg(target_os = "macos")]
 const AF_SYS_CONTROL: u16 = 2;
+#[cfg(target_os = "macos")]
 const AF_SYSTEM: u8 = 32;
+#[cfg(target_os = "macos")]
 const AF_INET: u8 = 2;
+#[cfg(target_os = "macos")]
 const PF_SYSTEM: c_int = AF_SYSTEM as c_int;
+#[cfg(target_os = "macos")]
 const SYSPROTO_CONTROL: c_int = 2;
+#[cfg(target_os = "macos")]
 const CTLIOCGINFO: c_ulong = 0xc0644e03;
+#[cfg(target_os = "macos")]
 const UTUN_CONTROL_NAME: &'static str = "com.apple.net.utun_control";
 
 #[cfg(target_os = "linux")]
