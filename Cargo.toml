@@ -1,0 +1,16 @@
+[package]
+name = "kytan"
+version = "0.0.1"
+authors = ["Chang Lan <clan@eecs.berkeley.edu>"]
+
+[dependencies]
+libc = "*"
+getopts = "*"
+mio = "*"
+rustc-serialize = "*"
+bincode = "*"
+log = "*"
+env_logger = "*"
+resolve = "*"
+byteorder = "*"
+pnet = "*"
