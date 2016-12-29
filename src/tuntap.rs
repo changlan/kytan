@@ -3,6 +3,7 @@ use libc;
 use libc::{c_int, c_ulong};
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
+use nix;
 
 #[cfg(target_os = "linux")]
 use libc::c_short;
@@ -15,7 +16,7 @@ const IFF_TUN: c_short = 0x0001;
 #[cfg(target_os = "linux")]
 const IFF_NO_PI: c_short = 0x1000;
 #[cfg(target_os = "linux")]
-const TUNSETIFF: c_ulong = 0x400454ca;
+const TUNSETIFF: c_ulong = 0x400454ca; // TODO: use _IOW('T', 202, int)
 
 #[cfg(target_os = "macos")]
 use libc::socklen_t;
@@ -36,7 +37,7 @@ const PF_SYSTEM: c_int = AF_SYSTEM as c_int;
 #[cfg(target_os = "macos")]
 const SYSPROTO_CONTROL: c_int = 2;
 #[cfg(target_os = "macos")]
-const CTLIOCGINFO: c_ulong = 0xc0644e03;
+const CTLIOCGINFO: c_ulong = 0xc0644e03; // TODO: use _IOWR('N', 3, struct ctl_info)
 #[cfg(target_os = "macos")]
 const UTUN_CONTROL_NAME: &'static str = "com.apple.net.utun_control";
 
@@ -125,7 +126,7 @@ impl Tun {
 
         let res = unsafe { libc::ioctl(fd, CTLIOCGINFO, &mut info) };
         if res < 0 {
-            unsafe { libc::close(fd) };
+            nix::unistd::close(fd).unwrap();
             panic!("{}", io::Error::last_os_error());
         }
 
@@ -147,7 +148,7 @@ impl Tun {
                           mem::size_of_val(&addr) as socklen_t)
         };
         if res < 0 {
-            unsafe { libc::close(fd) };
+            nix::unistd::close(fd).unwrap();
             panic!("{}", io::Error::last_os_error());
         }
 

@@ -6,10 +6,12 @@ extern crate bincode;
 extern crate resolve;
 extern crate byteorder;
 extern crate pnet;
+extern crate env_logger;
 
 #[macro_use]
+extern crate nix;
+#[macro_use]
 extern crate log;
-extern crate env_logger;
 
 mod tuntap;
 mod utils;
