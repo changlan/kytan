@@ -1,9 +1,8 @@
-use std::{fs, process, io, mem};
+use std::{fs, process, io};
 use libc;
-use libc::{c_int, c_ulong, socklen_t};
-use std::os::unix::io::{RawFd, AsRawFd, FromRawFd};
+use libc::{c_int, c_ulong};
+use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
-use byteorder::{BigEndian, WriteBytesExt};
 
 #[cfg(target_os = "linux")]
 use libc::c_short;
@@ -14,12 +13,18 @@ const IFNAMSIZ: usize = 16;
 #[cfg(target_os = "linux")]
 const IFF_TUN: c_short = 0x0001;
 #[cfg(target_os = "linux")]
-const IFF_TAP: c_short = 0x0002;
-#[cfg(target_os = "linux")]
 const IFF_NO_PI: c_short = 0x1000;
 #[cfg(target_os = "linux")]
 const TUNSETIFF: c_ulong = 0x400454ca;
 
+#[cfg(target_os = "macos")]
+use libc::socklen_t;
+#[cfg(target_os = "macos")]
+use std::mem;
+#[cfg(target_os = "macos")]
+use std::os::unix::io::FromRawFd;
+#[cfg(target_os = "macos")]
+use byteorder::{BigEndian, WriteBytesExt};
 #[cfg(target_os = "macos")]
 const AF_SYS_CONTROL: u16 = 2;
 #[cfg(target_os = "macos")]
@@ -40,13 +45,6 @@ const UTUN_CONTROL_NAME: &'static str = "com.apple.net.utun_control";
 pub struct ioctl_flags_data {
     pub ifr_name: [u8; IFNAMSIZ],
     pub ifr_flags: c_short,
-}
-
-#[cfg(target_os = "linux")]
-#[repr(C)]
-pub struct ioctl_ifindex_data {
-    pub ifr_name: [u8; IFNAMSIZ],
-    pub ifr_ifindex: c_int,
 }
 
 #[cfg(target_os = "macos")]
