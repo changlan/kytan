@@ -24,6 +24,6 @@ $ cargo build
 
 ### Running `kytan`
 
-Like any other VPN server, you need to enable IP forwarding in kernel first. You
-may need to configure `iptables` so that IP masquerading (or NAT) is enabled. In
-the future, `kytan` will automate these steps.
+Like any other VPN server, you need to configure `iptables` so that IP
+masquerading (or NAT) is enabled. In the future, `kytan` will automate these
+steps.

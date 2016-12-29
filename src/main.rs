@@ -12,13 +12,13 @@ extern crate log;
 extern crate env_logger;
 
 mod tuntap;
+mod utils;
 
 use std::env;
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use getopts::Options;
-use tuntap::*;
 use mio::*;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
@@ -66,7 +66,7 @@ fn connect(pass: &str, host: &str, port: u16) {
     info!("Session established. Assigned IP address: 10.10.10.{}.", id);
 
     info!("Bringing up TUN device tun1.");
-    let mut tun = Tun::create(1);
+    let mut tun = tuntap::Tun::create(1);
     let tun_rawfd = tun.as_raw_fd();
     tun.up(id);
     let tunfd = unix::EventedFd(&tun_rawfd);
@@ -124,10 +124,16 @@ fn connect(pass: &str, host: &str, port: u16) {
 }
 
 fn serve(pass: &str, port: u16) {
+    if cfg!(not(target_os = "linux")) {
+        panic!("Server mode is only available in Linux!");
+    }
     info!("Working in server mode.");
 
+    info!("Enabling kernel's IPv4 forwarding.");
+    utils::enable_ipv4_forwarding().unwrap();
+
     info!("Bringing up TUN device tun0.");
-    let mut tun = Tun::create(0);
+    let mut tun = tuntap::Tun::create(0);
     tun.up(1);
 
     let tun_rawfd = tun.as_raw_fd();
