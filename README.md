@@ -24,6 +24,12 @@ $ cargo build
 
 ### Running `kytan`
 
-Like any other VPN server, you need to configure `iptables` so that IP
+Like any other VPN server, you need to configure `iptables` to make sure IP
 masquerading (or NAT) is enabled. In the future, `kytan` will automate these
 steps.
+
+```
+$ sudo iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE
+```
+
+You may change `eth0` to the interface name on your server.
