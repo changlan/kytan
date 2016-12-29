@@ -31,7 +31,7 @@ fn main() {
     opts.reqopt("m", "mode", "mode (server or client)", "[s|c]");
     opts.reqopt("s", "secret", "shared secret", "PASS");
     opts.optopt("p", "port", "UDP port to listen/connect", "PORT");
-    opts.optopt("r", "remote IP", "remote IP to connect", "IP");
+    opts.optopt("h", "host", "remote host to connect (client mode)", "HOST");
 
     let args: Vec<String> = std::env::args().collect();
     let program = args[0].clone();
