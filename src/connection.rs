@@ -5,7 +5,6 @@ use mio;
 use resolve;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
-use pnet::packet::ipv4::Ipv4Packet;
 use tuntap;
 use utils;
 
@@ -104,14 +103,7 @@ pub fn connect(pass: &str, host: &str, port: u16) {
                             panic!("Invalid message {:?} from {}", msg, addr);
                         }
                         Message::Data { id: _, data } => {
-                            let pkt = Ipv4Packet::new(&data).unwrap();
                             let data_len = data.len();
-                            debug!("Data from {}. Len: {}. Source: {}. \
-                                   Destination: {}",
-                                   addr,
-                                   data_len,
-                                   pkt.get_source(),
-                                   pkt.get_destination());
                             let sent_len = tun.write(&data).unwrap();
                             assert_eq!(sent_len, data_len);
                         }
@@ -193,14 +185,6 @@ pub fn serve(pass: &str, port: u16) {
                         }
                         Message::Data { id: _, data } => {
                             let data_len = data.len();
-                            let pkt = Ipv4Packet::new(&data).unwrap();
-                            debug!("Data from {}. Len: {}. Source: {}. \
-                                   Destination: {}",
-                                   addr,
-                                   data_len,
-                                   pkt.get_source(),
-                                   pkt.get_destination());
-
                             let sent_len = tun.write(&data).unwrap();
                             assert_eq!(sent_len, data_len);
                         }
@@ -212,14 +196,7 @@ pub fn serve(pass: &str, port: u16) {
                     let client_id: u8 = data[19];
 
                     match client_map.get(&client_id) {
-                        None => {
-                            let pkt = Ipv4Packet::new(data).unwrap();
-                            warn!("Unknown IP packet from TUN for client {}. Source: {}. \
-                                   Destination: {}",
-                                  client_id,
-                                  pkt.get_source(),
-                                  pkt.get_destination())
-                        }
+                        None => warn!("Unknown IP packet from TUN for client {}.", client_id),
                         Some(addr) => {
                             let msg = Message::Data {
                                 id: client_id,

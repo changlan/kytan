@@ -4,8 +4,6 @@ extern crate mio;
 extern crate rustc_serialize;
 extern crate bincode;
 extern crate resolve;
-extern crate byteorder;
-extern crate pnet;
 extern crate env_logger;
 
 #[macro_use]
