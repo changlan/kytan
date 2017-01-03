@@ -3,7 +3,6 @@ use libc;
 use libc::{c_int, c_ulong};
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
-use utils;
 
 const MTU: &'static str = "1380";
 
@@ -212,19 +211,38 @@ impl Tun {
 
         assert!(status.success());
     }
+}
 
+impl Read for Tun {
     #[cfg(target_os = "linux")]
-    pub fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.handle.write(buf)
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.handle.read(buf)
     }
 
+
+
     #[cfg(target_os = "macos")]
-    pub fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut data = [0u8; 1600];
+        let result = self.handle.read(&mut data);
+        match result {
+            Ok(len) => {
+                buf[..len - 4].clone_from_slice(&data[4..len]);
+                Ok(if len > 4 { len - 4 } else { 0 })
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Write for Tun {
+    #[cfg(target_os = "linux")]
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.handle.write(buf)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let ip_v = buf[0] & 0xf;
         let mut data: Vec<u8> = if ip_v == 6 {
             vec![0, 0, 0, 10]
@@ -238,16 +256,7 @@ impl Tun {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    pub fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut data = [0u8; 1600];
-        let result = self.handle.read(&mut data);
-        match result {
-            Ok(len) => {
-                buf[..len - 4].clone_from_slice(&data[4..len]);
-                Ok(if len > 4 { len - 4 } else { 0 })
-            }
-            Err(e) => Err(e),
-        }
+    fn flush(&mut self) -> io::Result<()> {
+        self.handle.flush()
     }
 }

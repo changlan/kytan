@@ -2,12 +2,14 @@ use std::net::{SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
+use std::io::{Write, Read};
 use mio;
 use dns_lookup;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
 use tuntap;
 use utils;
+use snap;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -85,6 +87,8 @@ pub fn connect(pass: &str, host: &str, port: u16) {
 
     // RAII so ignore unused variable warning
     let _gw = utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()));
+    let mut encoder = snap::Encoder::new();
+    let mut decoder = snap::Decoder::new();
 
     info!("Ready for transmission.");
 
@@ -106,8 +110,9 @@ pub fn connect(pass: &str, host: &str, port: u16) {
                             panic!("Invalid message {:?} from {}", msg, addr);
                         }
                         Message::Data { id: _, data } => {
-                            let data_len = data.len();
-                            let sent_len = tun.write(&data).unwrap();
+                            let decompressed_data = decoder.decompress_vec(&data).unwrap();
+                            let data_len = decompressed_data.len();
+                            let sent_len = tun.write(&decompressed_data).unwrap();
                             assert_eq!(sent_len, data_len);
                         }
                     }
@@ -118,7 +123,7 @@ pub fn connect(pass: &str, host: &str, port: u16) {
 
                     let msg = Message::Data {
                         id: id,
-                        data: data.to_vec(),
+                        data: encoder.compress_vec(data).unwrap(),
                     };
                     let encoded_msg = encode(&msg, SizeLimit::Infinite).unwrap();
                     sockfd.send_to(&encoded_msg, &remote_addr).unwrap().unwrap();
@@ -159,6 +164,8 @@ pub fn serve(pass: &str, port: u16) {
     let mut client_map: HashMap<u8, SocketAddr> = HashMap::new();
 
     let mut buf = [0u8; 1600];
+    let mut encoder = snap::Encoder::new();
+    let mut decoder = snap::Decoder::new();
     info!("Ready for transmission.");
 
     loop {
@@ -191,8 +198,9 @@ pub fn serve(pass: &str, port: u16) {
                             warn!("Invalid message {:?} from {}", msg, addr)
                         }
                         Message::Data { id: _, data } => {
-                            let data_len = data.len();
-                            let sent_len = tun.write(&data).unwrap();
+                            let decompressed_data = decoder.decompress_vec(&data).unwrap();
+                            let data_len = decompressed_data.len();
+                            let sent_len = tun.write(&decompressed_data).unwrap();
                             assert_eq!(sent_len, data_len);
                         }
                     }
@@ -207,7 +215,7 @@ pub fn serve(pass: &str, port: u16) {
                         Some(addr) => {
                             let msg = Message::Data {
                                 id: client_id,
-                                data: data.to_vec(),
+                                data: encoder.compress_vec(data).unwrap(),
                             };
                             let encoded_msg = encode(&msg, SizeLimit::Infinite).unwrap();
                             sockfd.send_to(&encoded_msg, addr).unwrap().unwrap();

@@ -5,6 +5,7 @@ extern crate rustc_serialize;
 extern crate bincode;
 extern crate env_logger;
 extern crate dns_lookup;
+extern crate snap;
 
 #[macro_use]
 extern crate nix;
