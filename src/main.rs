@@ -3,13 +3,15 @@ extern crate getopts;
 extern crate mio;
 extern crate rustc_serialize;
 extern crate bincode;
-extern crate resolve;
 extern crate env_logger;
+extern crate dns_lookup;
 
 #[macro_use]
 extern crate nix;
 #[macro_use]
 extern crate log;
+
+use std::sync::atomic::Ordering;
 
 mod tuntap;
 mod utils;
@@ -18,6 +20,10 @@ mod connection;
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
     print!("{}", opts.usage(&brief));
+}
+
+extern "C" fn handle_signal(_: i32) {
+    connection::INTERRUPTED.store(true, Ordering::Relaxed);
 }
 
 fn main() {
@@ -48,6 +54,15 @@ fn main() {
     let pass = matches.opt_str("s").unwrap();
     let port: u16 = matches.opt_str("p").unwrap_or(String::from("8964")).parse().unwrap();
 
+    let sig_action =
+        nix::sys::signal::SigAction::new(nix::sys::signal::SigHandler::Handler(handle_signal),
+                                         nix::sys::signal::SaFlags::empty(),
+                                         nix::sys::signal::SigSet::empty());
+    unsafe {
+        nix::sys::signal::sigaction(nix::sys::signal::SIGINT, &sig_action).unwrap();
+        nix::sys::signal::sigaction(nix::sys::signal::SIGTERM, &sig_action).unwrap();
+    }
+
     match mode.as_ref() {
         "s" => connection::serve(&pass, port),
         "c" => {
@@ -56,4 +71,6 @@ fn main() {
         }
         _ => unreachable!(),
     };
+
+    println!("SIGINT/SIGTERM captured. Exit.");
 }

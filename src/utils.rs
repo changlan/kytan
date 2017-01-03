@@ -25,6 +25,32 @@ pub enum RouteType {
     Host,
 }
 
+pub struct DefaultGateway {
+    origin: String,
+    remote: String,
+}
+
+impl DefaultGateway {
+    pub fn create(gateway: &str, remote: &str) -> DefaultGateway {
+        let origin = get_default_gateway().unwrap();
+        add_route(RouteType::Host, remote, &origin).unwrap();
+        delete_default_gateway().unwrap();
+        set_default_gateway(gateway).unwrap();
+        DefaultGateway {
+            origin: origin,
+            remote: String::from(remote),
+        }
+    }
+}
+
+impl Drop for DefaultGateway {
+    fn drop(&mut self) {
+        delete_default_gateway().unwrap();
+        set_default_gateway(&self.origin).unwrap();
+        delete_route(RouteType::Host, &self.remote).unwrap();
+    }
+}
+
 pub fn delete_route(route_type: RouteType, route: &str) -> Result<(), String> {
     let mode = match route_type {
         RouteType::Net => "-net",

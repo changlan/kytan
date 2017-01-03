@@ -3,6 +3,7 @@ use libc;
 use libc::{c_int, c_ulong};
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
+use utils;
 
 const MTU: &'static str = "1380";
 
@@ -79,8 +80,16 @@ impl AsRawFd for Tun {
 }
 
 impl Tun {
-    #[cfg(target_os = "linux")]
     pub fn create(name: u8) -> Tun {
+        let (handle, if_name) = Tun::create_if(name);
+        Tun {
+            handle: handle,
+            if_name: if_name,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn create_if(name: u8) -> (fs::File, String) {
         let path = path::Path::new("/dev/net/tun");
         let file = match fs::OpenOptions::new().read(true).write(true).open(&path) {
             Err(why) => panic!("Couldn't open device '{}': {:?}", path.display(), why),
@@ -103,14 +112,13 @@ impl Tun {
         }
 
         let size = req.ifr_name.iter().position(|&r| r == 0).unwrap();
-        Tun {
-            handle: file,
-            if_name: String::from_utf8(req.ifr_name[..size].to_vec()).unwrap(),
-        }
+
+        let if_name = String::from_utf8(req.ifr_name[..size].to_vec()).unwrap();
+        (file, if_name)
     }
 
     #[cfg(target_os = "macos")]
-    pub fn create(name: u8) -> Tun {
+    fn create_if(name: u8) -> (fs::File, String) {
         let handle = {
             let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
             if fd < 0 {
@@ -158,10 +166,8 @@ impl Tun {
         fcntl(handle.as_raw_fd(), FcntlArg::F_SETFL(O_NONBLOCK)).unwrap();
         fcntl(handle.as_raw_fd(), FcntlArg::F_SETFD(FD_CLOEXEC)).unwrap();
 
-        Tun {
-            handle: handle,
-            if_name: format!("utun{}", name),
-        }
+        let if_name = format!("utun{}", name);
+        (handle, if_name)
     }
 
     pub fn up(&self, self_id: u8) {
@@ -173,7 +179,7 @@ impl Tun {
                 .unwrap()
         } else if cfg!(target_os = "macos") {
             process::Command::new("ifconfig")
-                .arg(self.if_name.as_str())
+                .arg(self.if_name.clone())
                 .arg(format!("10.10.10.{}", self_id))
                 .arg("10.10.10.1")
                 .status()
@@ -194,7 +200,7 @@ impl Tun {
                 .unwrap()
         } else if cfg!(target_os = "macos") {
             process::Command::new("ifconfig")
-                .arg(self.if_name.as_str())
+                .arg(self.if_name.clone())
                 .arg("mtu")
                 .arg(MTU)
                 .arg("up")

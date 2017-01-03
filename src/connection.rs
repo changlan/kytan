@@ -1,12 +1,15 @@
 use std::net::{SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use mio;
-use resolve;
+use dns_lookup;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
 use tuntap;
 use utils;
+
+pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq, Debug)]
 enum Message {
@@ -19,8 +22,8 @@ const TUN: mio::Token = mio::Token(0);
 const SOCK: mio::Token = mio::Token(1);
 
 fn resolve(host: &str, port: u16) -> Result<SocketAddr, String> {
-    let mut ip_list = try!(resolve::resolve_host(host).map_err(|e| e.to_string()));
-    let ip = try!(ip_list.next().ok_or("No IP found for host."));
+    let mut ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
+    let ip = ip_list.next().unwrap().unwrap();
     Ok(SocketAddr::new(ip, port))
 }
 
@@ -48,6 +51,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
     }
 }
+
 
 pub fn connect(pass: &str, host: &str, port: u16) {
     info!("Working in client mode.");
@@ -79,17 +83,16 @@ pub fn connect(pass: &str, host: &str, port: u16) {
     let mut events = mio::Events::with_capacity(1024);
     let mut buf = [0u8; 1600];
 
-    let external_gateway = utils::get_default_gateway().unwrap();
-    utils::add_route(utils::RouteType::Host,
-                     &format!("{}", remote_addr.ip()),
-                     &external_gateway)
-        .unwrap();
+    // RAII so ignore unused variable warning
+    let _gw = utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()));
 
-    utils::delete_default_gateway().unwrap();
-    utils::set_default_gateway("10.10.10.1").unwrap();
     info!("Ready for transmission.");
 
     loop {
+        if INTERRUPTED.load(Ordering::Relaxed) {
+            break;
+        }
+
         poll.poll(&mut events, None).unwrap();
 
         for event in events.iter() {
@@ -159,6 +162,10 @@ pub fn serve(pass: &str, port: u16) {
     info!("Ready for transmission.");
 
     loop {
+        if INTERRUPTED.load(Ordering::Relaxed) {
+            break;
+        }
+
         poll.poll(&mut events, None).unwrap();
 
         for event in events.iter() {
