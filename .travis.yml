@@ -1,3 +1,4 @@
+sudo: required
 language: rust
 
 rust:
@@ -7,12 +8,13 @@ env:
   global:
   - CRATE_NAME=kytan
   - DEPLOY_VERSION=stable
-  - TARGET=x86_64-unknown-linux-gnu
 
 matrix:
   include:
   - env: TARGET=i686-unknown-linux-gnu
+    os: linux
   - env: TARGET=x86_64-unknown-linux-gnu
+    os: linux
   - env: TARGET=i686-apple-darwin
     os: osx
   - env: TARGET=x86_64-apple-darwin
