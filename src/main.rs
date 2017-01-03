@@ -53,10 +53,9 @@ fn main() {
     match mode.as_ref() {
         "s" => connection::serve(&pass, port),
         "c" => {
-            let host = matches.opt_str("r").unwrap();
+            let host = matches.opt_str("h").unwrap();
             connection::connect(&pass, &host, port)
         }
         _ => unreachable!(),
     };
-    unreachable!()
 }

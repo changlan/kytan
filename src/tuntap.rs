@@ -3,7 +3,8 @@ use libc;
 use libc::{c_int, c_ulong};
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
-use nix;
+
+const MTU: &'static str = "1380";
 
 #[cfg(target_os = "linux")]
 use libc::c_short;
@@ -19,19 +20,19 @@ const IFF_NO_PI: c_short = 0x1000;
 const TUNSETIFF: c_ulong = 0x400454ca; // TODO: use _IOW('T', 202, int)
 
 #[cfg(target_os = "macos")]
+use nix;
+#[cfg(target_os = "macos")]
+use nix::fcntl::*;
+#[cfg(target_os = "macos")]
 use libc::socklen_t;
 #[cfg(target_os = "macos")]
 use std::mem;
 #[cfg(target_os = "macos")]
 use std::os::unix::io::FromRawFd;
 #[cfg(target_os = "macos")]
-use byteorder::{BigEndian, WriteBytesExt};
-#[cfg(target_os = "macos")]
 const AF_SYS_CONTROL: u16 = 2;
 #[cfg(target_os = "macos")]
 const AF_SYSTEM: u8 = 32;
-#[cfg(target_os = "macos")]
-const AF_INET: u8 = 2;
 #[cfg(target_os = "macos")]
 const PF_SYSTEM: c_int = AF_SYSTEM as c_int;
 #[cfg(target_os = "macos")]
@@ -110,10 +111,13 @@ impl Tun {
 
     #[cfg(target_os = "macos")]
     pub fn create(name: u8) -> Tun {
-        let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
-        if fd < 0 {
-            panic!("{}", io::Error::last_os_error());
-        }
+        let handle = {
+            let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
+            if fd < 0 {
+                panic!("{}", io::Error::last_os_error());
+            }
+            unsafe { fs::File::from_raw_fd(fd) }
+        };
 
         let mut info = ctl_info {
             ctl_id: 0,
@@ -124,9 +128,9 @@ impl Tun {
             },
         };
 
-        let res = unsafe { libc::ioctl(fd, CTLIOCGINFO, &mut info) };
-        if res < 0 {
-            nix::unistd::close(fd).unwrap();
+        let res = unsafe { libc::ioctl(handle.as_raw_fd(), CTLIOCGINFO, &mut info) };
+        if res != 0 {
+            nix::unistd::close(handle.as_raw_fd()).unwrap();
             panic!("{}", io::Error::last_os_error());
         }
 
@@ -143,17 +147,19 @@ impl Tun {
         // is our sc_unit-1
         let res = unsafe {
             let addr_ptr = &addr as *const sockaddr_ctl;
-            libc::connect(fd,
+            libc::connect(handle.as_raw_fd(),
                           addr_ptr as *const libc::sockaddr,
                           mem::size_of_val(&addr) as socklen_t)
         };
-        if res < 0 {
-            nix::unistd::close(fd).unwrap();
+        if res != 0 {
             panic!("{}", io::Error::last_os_error());
         }
 
+        fcntl(handle.as_raw_fd(), FcntlArg::F_SETFL(O_NONBLOCK)).unwrap();
+        fcntl(handle.as_raw_fd(), FcntlArg::F_SETFD(FD_CLOEXEC)).unwrap();
+
         Tun {
-            handle: unsafe { fs::File::from_raw_fd(fd) },
+            handle: handle,
             if_name: format!("utun{}", name),
         }
     }
@@ -164,14 +170,14 @@ impl Tun {
                 .arg(self.if_name.clone())
                 .arg(format!("10.10.10.{}/24", self_id))
                 .status()
-                .expect("ifconfig command failed to start")
+                .unwrap()
         } else if cfg!(target_os = "macos") {
             process::Command::new("ifconfig")
                 .arg(self.if_name.as_str())
                 .arg(format!("10.10.10.{}", self_id))
                 .arg("10.10.10.1")
                 .status()
-                .expect("ifconfig command failed to start")
+                .unwrap()
         } else {
             unimplemented!()
         };
@@ -182,18 +188,18 @@ impl Tun {
             process::Command::new("ifconfig")
                 .arg(self.if_name.clone())
                 .arg("mtu")
-                .arg("1480")
+                .arg(MTU)
                 .arg("up")
                 .status()
-                .expect("ifconfig command failed to start")
+                .unwrap()
         } else if cfg!(target_os = "macos") {
             process::Command::new("ifconfig")
                 .arg(self.if_name.as_str())
                 .arg("mtu")
-                .arg("1480")
+                .arg(MTU)
                 .arg("up")
                 .status()
-                .expect("ifconfig command failed to start")
+                .unwrap()
         } else {
             unimplemented!()
         };
@@ -213,11 +219,13 @@ impl Tun {
 
     #[cfg(target_os = "macos")]
     pub fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut data = vec![];
-        {
-            data.write_u32::<BigEndian>(AF_INET as u32).unwrap();
-            data.write_all(buf).unwrap();
-        }
+        let ip_v = buf[0] & 0xf;
+        let mut data: Vec<u8> = if ip_v == 6 {
+            vec![0, 0, 0, 10]
+        } else {
+            vec![0, 0, 0, 2]
+        };
+        data.write_all(buf).unwrap();
         match self.handle.write(&data) {
             Ok(len) => Ok(if len > 4 { len - 4 } else { 0 }),
             Err(e) => Err(e),

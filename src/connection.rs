@@ -71,14 +71,23 @@ pub fn connect(pass: &str, host: &str, port: u16) {
 
     let poll = mio::Poll::new().unwrap();
     info!("Setting up TUN device for polling.");
-    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     info!("Setting up socket for polling.");
     let sockfd = mio::udp::UdpSocket::from_socket(socket).unwrap();
-    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
     let mut buf = [0u8; 1600];
+
+    let external_gateway = utils::get_default_gateway().unwrap();
+    utils::add_route(utils::RouteType::Host,
+                     &format!("{}", remote_addr.ip()),
+                     &external_gateway)
+        .unwrap();
+
+    utils::delete_default_gateway().unwrap();
+    utils::set_default_gateway("10.10.10.1").unwrap();
     info!("Ready for transmission.");
 
     loop {
@@ -95,7 +104,14 @@ pub fn connect(pass: &str, host: &str, port: u16) {
                             panic!("Invalid message {:?} from {}", msg, addr);
                         }
                         Message::Data { id: _, data } => {
+                            let pkt = Ipv4Packet::new(&data).unwrap();
                             let data_len = data.len();
+                            debug!("Data from {}. Len: {}. Source: {}. \
+                                   Destination: {}",
+                                   addr,
+                                   data_len,
+                                   pkt.get_source(),
+                                   pkt.get_destination());
                             let sent_len = tun.write(&data).unwrap();
                             assert_eq!(sent_len, data_len);
                         }
@@ -140,8 +156,8 @@ pub fn serve(pass: &str, port: u16) {
     info!("Listening on: 0.0.0.0:{}.", port);
 
     let poll = mio::Poll::new().unwrap();
-    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
-    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::edge()).unwrap();
+    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
+    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
     let mut available_ids: Vec<u8> = (2..254).collect();
