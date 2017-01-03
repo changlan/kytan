@@ -1,6 +1,6 @@
 use std::{fs, process, io};
 use libc;
-use libc::{c_int, c_ulong};
+use libc::c_ulong;
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
 
@@ -24,7 +24,7 @@ use nix;
 #[cfg(target_os = "macos")]
 use nix::fcntl::*;
 #[cfg(target_os = "macos")]
-use libc::socklen_t;
+use libc::{c_int, socklen_t};
 #[cfg(target_os = "macos")]
 use std::mem;
 #[cfg(target_os = "macos")]

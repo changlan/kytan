@@ -55,7 +55,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
 }
 
 
-pub fn connect(pass: &str, host: &str, port: u16) {
+pub fn connect(host: &str, port: u16) {
     info!("Working in client mode.");
     let remote_addr = resolve(host, port).unwrap();
     info!("Remote server: {}", remote_addr);
@@ -134,7 +134,7 @@ pub fn connect(pass: &str, host: &str, port: u16) {
     }
 }
 
-pub fn serve(pass: &str, port: u16) {
+pub fn serve(port: u16) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }

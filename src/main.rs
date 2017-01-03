@@ -36,7 +36,6 @@ fn main() {
 
     let mut opts = getopts::Options::new();
     opts.reqopt("m", "mode", "mode (server or client)", "[s|c]");
-    opts.reqopt("s", "secret", "shared secret", "PASS");
     opts.optopt("p", "port", "UDP port to listen/connect", "PORT");
     opts.optopt("h", "host", "remote host to connect (client mode)", "HOST");
 
@@ -52,7 +51,6 @@ fn main() {
     };
 
     let mode = matches.opt_str("m").unwrap();
-    let pass = matches.opt_str("s").unwrap();
     let port: u16 = matches.opt_str("p").unwrap_or(String::from("8964")).parse().unwrap();
 
     let sig_action =
@@ -65,10 +63,10 @@ fn main() {
     }
 
     match mode.as_ref() {
-        "s" => connection::serve(&pass, port),
+        "s" => connection::serve(port),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            connection::connect(&pass, &host, port)
+            connection::connect(&host, port)
         }
         _ => unreachable!(),
     };
