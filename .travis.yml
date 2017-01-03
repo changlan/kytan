@@ -1,4 +1,3 @@
-sudo: required
 language: rust
 
 rust:
@@ -19,6 +18,11 @@ matrix:
     os: osx
   - env: TARGET=x86_64-apple-darwin
     os: osx
+
+addons:
+  apt:
+    packages:
+      - gcc-multilib
 
 deploy:
   provider: releases
