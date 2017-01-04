@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -23,10 +23,10 @@ enum Message {
 const TUN: mio::Token = mio::Token(0);
 const SOCK: mio::Token = mio::Token(1);
 
-fn resolve(host: &str, port: u16) -> Result<SocketAddr, String> {
+fn resolve(host: &str) -> Result<IpAddr, String> {
     let mut ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
     let ip = ip_list.next().unwrap().unwrap();
-    Ok(SocketAddr::new(ip, port))
+    Ok(ip)
 }
 
 fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
@@ -57,7 +57,8 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
 
 pub fn connect(host: &str, port: u16) {
     info!("Working in client mode.");
-    let remote_addr = resolve(host, port).unwrap();
+    let remote_ip = resolve(host).unwrap();
+    let remote_addr = SocketAddr::new(remote_ip, port);
     info!("Remote server: {}", remote_addr);
 
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
@@ -226,4 +227,13 @@ pub fn serve(port: u16) {
             }
         }
     }
+}
+
+
+#[test]
+fn resolve_ip() {
+    assert_eq!(resolve("127.0.0.1").unwrap(),
+               IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    assert_eq!(resolve("localhost").unwrap(),
+               IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)));
 }
