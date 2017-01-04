@@ -23,6 +23,10 @@ addons:
       - binutils-dev
       - gcc-multilib
 
+script:
+  - cargo build --release --verbose
+  - cargo test --verbose
+
 after_success: |
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
   tar xzf master.tar.gz &&
