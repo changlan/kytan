@@ -8,21 +8,35 @@ env:
   - CRATE_NAME=kytan
   - DEPLOY_VERSION=stable
 
-matrix:
-  include:
-  - env: TARGET=i686-unknown-linux-gnu
-    os: linux
-  - env: TARGET=x86_64-unknown-linux-gnu
-    os: linux
-  - env: TARGET=i686-apple-darwin
-    os: osx
-  - env: TARGET=x86_64-apple-darwin
-    os: osx
+os:
+  - linux
+  - osx
 
 addons:
   apt:
     packages:
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - cmake
+      - gcc
+      - binutils-dev
       - gcc-multilib
+
+after_success: |
+  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+  tar xzf master.tar.gz &&
+  cd kcov-master &&
+  mkdir build &&
+  cd build &&
+  cmake .. &&
+  make &&
+  sudo make install &&
+  cd ../.. &&
+  rm -rf kcov-master &&
+  kcov --exclude-pattern=/.cargo,/usr/lib --verify target/cov target/debug/<executable name>-* &&
+  bash <(curl -s https://codecov.io/bash) &&
+  echo "Uploaded code coverage"
 
 deploy:
   provider: releases
