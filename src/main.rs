@@ -66,7 +66,7 @@ fn main() {
         "s" => connection::serve(port),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            connection::connect(&host, port)
+            connection::connect(&host, port, true)
         }
         _ => unreachable!(),
     };

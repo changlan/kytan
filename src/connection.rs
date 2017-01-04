@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr, UdpSocket};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -55,7 +55,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
 }
 
 
-pub fn connect(host: &str, port: u16) {
+pub fn connect(host: &str, port: u16, default: bool) {
     info!("Working in client mode.");
     let remote_ip = resolve(host).unwrap();
     let remote_addr = SocketAddr::new(remote_ip, port);
@@ -87,7 +87,12 @@ pub fn connect(host: &str, port: u16) {
     let mut buf = [0u8; 1600];
 
     // RAII so ignore unused variable warning
-    let _gw = utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()));
+    let _gw = if default {
+        Some(utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip())))
+    } else {
+        None
+    };
+
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
 
