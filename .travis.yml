@@ -40,7 +40,7 @@ after_success: |
   sudo make install &&
   cd ../.. &&
   rm -rf kcov-master &&
-  kcov --exclude-pattern=/.cargo,/usr/lib --verify target/cov target/debug/$CRATE_NAME-* &&
+  for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"
 
