@@ -19,7 +19,7 @@ your machine is installed with [Rust](https://www.rust-lang.org/en-US/install.ht
 ```
 $ git clone git@github.com:changlan/kytan.git
 $ cd kytan
-$ cargo build
+$ cargo build --release
 ```
 
 ### Running `kytan`
