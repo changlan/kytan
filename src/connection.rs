@@ -229,11 +229,8 @@ pub fn serve(port: u16) {
     }
 }
 
-
 #[test]
 fn resolve_ip() {
     assert_eq!(resolve("127.0.0.1").unwrap(),
                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-    assert_eq!(resolve("localhost").unwrap(),
-               IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)));
 }
