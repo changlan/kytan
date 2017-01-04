@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/changlan/kytan.svg?branch=master)](https://travis-ci.org/changlan/kytan)
+[![codecov](https://codecov.io/gh/changlan/kytan/branch/master/graph/badge.svg)](https://codecov.io/gh/changlan/kytan)
 
 ## kytan: High Performance Peer-to-Peer VPN
 
