@@ -24,10 +24,8 @@ addons:
       - gcc-multilib
 
 script:
-  - cargo build --verbose
-  - cargo test --verbose
+  - RUSTFLAGS='-C link-dead-code' cargo test --verbose
   - cargo build --release --verbose
-  - cargo test --release --verbose
 
 after_success: |
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
