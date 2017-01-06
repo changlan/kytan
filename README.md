@@ -25,12 +25,33 @@ $ cargo build --release
 
 ### Running `kytan`
 
+For complete usage information,
+
+```
+$ sudo ./kytan -h
+```
+
+#### Server Mode
+
 Like any other VPN server, you need to configure `iptables` to make sure IP
-masquerading (or NAT) is enabled. In the future, `kytan` will automate these
-steps.
+masquerading (or NAT) is enabled. This should be done only one. In the future,
+`kytan` will automate these steps. You may change `eth0` to the interface name 
+on your server.
 
 ```
 $ sudo iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE
 ```
 
-You may change `eth0` to the interface name on your server.
+To run `kytan` in server mode and listen on UDP port `9527`:
+
+```
+$ sudo ./kytan -m s -p 9527
+```
+
+#### Client Mode
+
+To run `kytan` in client mode and connect to the server `kytan.info:9527`:
+
+```
+$sudo ./kytan -m c -p 9527 -h kytan.info
+```
