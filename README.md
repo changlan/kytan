@@ -33,10 +33,10 @@ $ sudo ./kytan -h
 
 #### Server Mode
 
-Like any other VPN server, you need to configure `iptables` to make sure IP
-masquerading (or NAT) is enabled. This should be done only one. In the future,
-`kytan` will automate these steps. You may change `eth0` to the interface name 
-on your server.
+Like any other VPN server, you need to configure `iptables` as following to make 
+sure IP masquerading (or NAT) is enabled, which should be done only once. In the 
+future, `kytan` will automate these steps. You may change `eth0` to the 
+interface name on your server:
 
 ```
 $ sudo iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE
