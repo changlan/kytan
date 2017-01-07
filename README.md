@@ -25,7 +25,7 @@ $ cargo build --release
 
 ### Running `kytan`
 
-For complete usage information,
+For complete information:
 
 ```
 $ sudo ./kytan -h
@@ -53,5 +53,5 @@ $ sudo ./kytan -m s -p 9527
 To run `kytan` in client mode and connect to the server `kytan.info:9527`:
 
 ```
-$sudo ./kytan -m c -p 9527 -h kytan.info
+$ sudo ./kytan -m c -p 9527 -h kytan.info
 ```
