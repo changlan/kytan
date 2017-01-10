@@ -58,4 +58,4 @@ $ sudo ./kytan -m c -p 9527 -h kytan.info
 
 ### License
 
-MIT
+Apache 2.0
