@@ -33,9 +33,9 @@ $ sudo ./kytan -h
 
 #### Server Mode
 
-Like any other VPN server, you need to configure `iptables` as following to make 
-sure IP masquerading (or NAT) is enabled, which should be done only once. In the 
-future, `kytan` will automate these steps. You may change `eth0` to the 
+Like any other VPN server, you need to configure `iptables` as following to make
+sure IP masquerading (or NAT) is enabled, which should be done only once. In the
+future, `kytan` will automate these steps. You may change `eth0` to the
 interface name on your server:
 
 ```
@@ -55,3 +55,7 @@ To run `kytan` in client mode and connect to the server `kytan.info:9527`:
 ```
 $ sudo ./kytan -m c -p 9527 -h kytan.info
 ```
+
+### License
+
+MIT
