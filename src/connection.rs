@@ -132,21 +132,29 @@ pub fn connect(host: &str, port: u16, default: bool) {
                         Message::Data { id: _, data } => {
                             let decompressed_data = decoder.decompress_vec(&data).unwrap();
                             let data_len = decompressed_data.len();
-                            let sent_len = tun.write(&decompressed_data).unwrap();
-                            assert_eq!(sent_len, data_len);
+                            let mut sent_len = 0;
+                            while sent_len < data_len {
+                                sent_len += tun.write(&decompressed_data[sent_len..data_len])
+                                    .unwrap();
+                            }
                         }
                     }
                 }
                 TUN => {
                     let len: usize = tun.read(&mut buf).unwrap();
                     let data = &buf[0..len];
-
                     let msg = Message::Data {
                         id: id,
                         data: encoder.compress_vec(data).unwrap(),
                     };
                     let encoded_msg = encode(&msg, SizeLimit::Infinite).unwrap();
-                    sockfd.send_to(&encoded_msg, &remote_addr).unwrap().unwrap();
+                    let data_len = encoded_msg.len();
+                    let mut sent_len = 0;
+                    while sent_len < data_len {
+                        sent_len += sockfd.send_to(&encoded_msg[sent_len..data_len], &remote_addr)
+                            .unwrap()
+                            .unwrap();
+                    }
                 }
                 _ => unreachable!(),
             }
@@ -211,8 +219,14 @@ pub fn serve(port: u16) {
 
                             let reply = Message::Response { id: client_id };
                             let encoded_reply = encode(&reply, SizeLimit::Infinite).unwrap();
-                            let sent_len = sockfd.send_to(&encoded_reply, &addr).unwrap().unwrap();
-                            assert_eq!(sent_len, encoded_reply.len());
+                            let data_len = encoded_reply.len();
+                            let mut sent_len = 0;
+                            while sent_len < data_len {
+                                sent_len +=
+                                    sockfd.send_to(&encoded_reply[sent_len..data_len], &addr)
+                                        .unwrap()
+                                        .unwrap();
+                            }
                         }
                         Message::Response { id: _ } => {
                             warn!("Invalid message {:?} from {}", msg, addr)
@@ -220,8 +234,11 @@ pub fn serve(port: u16) {
                         Message::Data { id: _, data } => {
                             let decompressed_data = decoder.decompress_vec(&data).unwrap();
                             let data_len = decompressed_data.len();
-                            let sent_len = tun.write(&decompressed_data).unwrap();
-                            assert_eq!(sent_len, data_len);
+                            let mut sent_len = 0;
+                            while sent_len < data_len {
+                                sent_len += tun.write(&decompressed_data[sent_len..data_len])
+                                    .unwrap();
+                            }
                         }
                     }
                 }
