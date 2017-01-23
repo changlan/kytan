@@ -38,7 +38,7 @@ use nix;
 #[cfg(target_os = "macos")]
 use nix::fcntl::*;
 #[cfg(target_os = "macos")]
-use libc::{c_int, socklen_t};
+use libc::{c_int, socklen_t, c_void};
 #[cfg(target_os = "macos")]
 use std::mem;
 #[cfg(target_os = "macos")]
@@ -51,6 +51,8 @@ const AF_SYSTEM: u8 = 32;
 const PF_SYSTEM: c_int = AF_SYSTEM as c_int;
 #[cfg(target_os = "macos")]
 const SYSPROTO_CONTROL: c_int = 2;
+#[cfg(target_os = "macos")]
+const UTUN_OPT_IFNAME: c_int = 2;
 #[cfg(target_os = "macos")]
 const CTLIOCGINFO: c_ulong = 0xc0644e03; // TODO: use _IOWR('N', 3, struct ctl_info)
 #[cfg(target_os = "macos")]
@@ -93,21 +95,10 @@ impl AsRawFd for Tun {
 }
 
 impl Tun {
-    pub fn create(name: u8) -> Tun {
-        let (handle, if_name) = Tun::create_if(name);
-        Tun {
-            handle: handle,
-            if_name: if_name,
-        }
-    }
-
     #[cfg(target_os = "linux")]
-    fn create_if(name: u8) -> (fs::File, String) {
+    pub fn create(name: u8) -> Result<Tun, io::Error> {
         let path = path::Path::new("/dev/net/tun");
-        let file = match fs::OpenOptions::new().read(true).write(true).open(&path) {
-            Err(why) => panic!("Couldn't open device '{}': {:?}", path.display(), why),
-            Ok(file) => file,
-        };
+        let file = try!(fs::OpenOptions::new().read(true).write(true).open(&path));
 
         let mut req = ioctl_flags_data {
             ifr_name: {
@@ -121,21 +112,23 @@ impl Tun {
 
         let res = unsafe { libc::ioctl(file.as_raw_fd(), TUNSETIFF, &mut req) }; // TUNSETIFF
         if res < 0 {
-            panic!("{}", io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
 
         let size = req.ifr_name.iter().position(|&r| r == 0).unwrap();
-
-        let if_name = String::from_utf8(req.ifr_name[..size].to_vec()).unwrap();
-        (file, if_name)
+        let tun = Tun {
+            handle: file,
+            if_name: String::from_utf8(req.ifr_name[..size].to_vec()).unwrap(),
+        };
+        Ok(tun)
     }
 
     #[cfg(target_os = "macos")]
-    fn create_if(name: u8) -> (fs::File, String) {
+    pub fn create(name: u8) -> Result<Tun, io::Error> {
         let handle = {
             let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
             if fd < 0 {
-                panic!("{}", io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
             unsafe { fs::File::from_raw_fd(fd) }
         };
@@ -152,7 +145,7 @@ impl Tun {
         let res = unsafe { libc::ioctl(handle.as_raw_fd(), CTLIOCGINFO, &mut info) };
         if res != 0 {
             nix::unistd::close(handle.as_raw_fd()).unwrap();
-            panic!("{}", io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
 
         let addr = sockaddr_ctl {
@@ -173,14 +166,37 @@ impl Tun {
                           mem::size_of_val(&addr) as socklen_t)
         };
         if res != 0 {
-            panic!("{}", io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
 
-        fcntl(handle.as_raw_fd(), FcntlArg::F_SETFL(O_NONBLOCK)).unwrap();
-        fcntl(handle.as_raw_fd(), FcntlArg::F_SETFD(FD_CLOEXEC)).unwrap();
+        let mut name_buf = [0u8; 64];
+        let mut name_length: socklen_t = 64;
+        let res = unsafe {
+            libc::getsockopt(handle.as_raw_fd(),
+                             SYSPROTO_CONTROL,
+                             UTUN_OPT_IFNAME,
+                             &mut name_buf as *mut _ as *mut c_void,
+                             &mut name_length as *mut socklen_t)
+        };
+        if res != 0 {
+            return Err(io::Error::last_os_error());
+        }
 
-        let if_name = format!("utun{}", name);
-        (handle, if_name)
+        try!(fcntl(handle.as_raw_fd(), FcntlArg::F_SETFL(O_NONBLOCK)));
+        try!(fcntl(handle.as_raw_fd(), FcntlArg::F_SETFD(FD_CLOEXEC)));
+
+        let tun = Tun {
+            handle: handle,
+            if_name: {
+                let len = name_buf.iter().position(|&r| r == 0).unwrap();
+                String::from_utf8(name_buf[..len].to_vec()).unwrap()
+            },
+        };
+        Ok(tun)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.if_name
     }
 
     pub fn up(&self, self_id: u8) {

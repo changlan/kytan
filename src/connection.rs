@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
+use std::net::{SocketAddr, IpAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
@@ -41,6 +41,21 @@ fn resolve(host: &str) -> Result<IpAddr, String> {
     let mut ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
     let ip = ip_list.next().unwrap().unwrap();
     Ok(ip)
+}
+
+fn create_tun_attempt() -> tuntap::Tun {
+    fn attempt(id: u8) -> tuntap::Tun {
+        match id {
+            255 => panic!("Unable to create TUN device."),
+            _ => {
+                match tuntap::Tun::create(id) {
+                    Ok(tun) => tun,
+                    Err(_) => attempt(id + 1),
+                }
+            }
+        }
+    }
+    attempt(0)
 }
 
 fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
@@ -81,12 +96,13 @@ pub fn connect(host: &str, port: u16, default: bool) {
     let id = initiate(&socket, &remote_addr).unwrap();
     info!("Session established. Assigned IP address: 10.10.10.{}.", id);
 
-    info!("Bringing up TUN device tun1.");
-    let mut tun = tuntap::Tun::create(1);
+    info!("Bringing up TUN device.");
+    let mut tun = create_tun_attempt();
     let tun_rawfd = tun.as_raw_fd();
     tun.up(id);
     let tunfd = mio::unix::EventedFd(&tun_rawfd);
-    info!("TUN device tun1 initialized. Internal IP: 10.10.10.{}/24.",
+    info!("TUN device {} initialized. Internal IP: 10.10.10.{}/24.",
+          tun.name(),
           id);
 
     let poll = mio::Poll::new().unwrap();
@@ -171,13 +187,14 @@ pub fn serve(port: u16) {
     info!("Enabling kernel's IPv4 forwarding.");
     utils::enable_ipv4_forwarding().unwrap();
 
-    info!("Bringing up TUN device tun0.");
-    let mut tun = tuntap::Tun::create(0);
+    info!("Bringing up TUN device.");
+    let mut tun = create_tun_attempt();
     tun.up(1);
 
     let tun_rawfd = tun.as_raw_fd();
     let tunfd = mio::unix::EventedFd(&tun_rawfd);
-    info!("TUN device tun0 initialized. Internal IP: 10.10.10.1/24.");
+    info!("TUN device {} initialized. Internal IP: 10.10.10.1/24.",
+          tun.name());
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
     let sockfd = mio::udp::UdpSocket::bind(&addr).unwrap();
@@ -264,6 +281,9 @@ pub fn serve(port: u16) {
         }
     }
 }
+
+#[test]
+use std::net::Ipv4Addr;
 
 #[test]
 fn resolve_ip() {
