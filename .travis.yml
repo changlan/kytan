@@ -6,13 +6,14 @@ rust:
 
 env:
   global:
-  - CRATE_NAME=kytan
-  - DEPLOY_VERSION=stable
+    - CRATE_NAME=kytan
+    - DEPLOY_VERSION=stable
+    
+    # Default job
+    - TARGET=x86_64-unknown-linux-gnu
 
 matrix:
   include:
-    - env: TARGET=x86_64-unknown-linux-gnu
-
     - env: TARGET=x86_64-apple-darwin
       os: osx
 
