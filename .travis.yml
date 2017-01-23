@@ -1,3 +1,4 @@
+dist: trusty
 language: rust
 
 rust:
@@ -8,9 +9,12 @@ env:
   - CRATE_NAME=kytan
   - DEPLOY_VERSION=stable
 
-os:
-  - linux
-  - osx
+matrix:
+  include:
+    - env: TARGET=x86_64-unknown-linux-gnu
+
+    - env: TARGET=x86_64-apple-darwin
+      os: osx
 
 addons:
   apt:
@@ -42,12 +46,18 @@ after_success: |
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"
 
+before_deploy:
+  - local src=$(pwd) stage=$(mktemp -d -t tmp)
+  - cp target/release/kytan $stage/
+  - cd $stage && tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz * && cd $src
+  - rm -rf $stage
+
 deploy:
   provider: releases
   api_key:
     secure: Z5U7PCiM58mfD4s7n/Q0QPItHs5epyC7lFC0hoJOhShCWM3NWm0NvALcSYV1IQI+nS9/J0Wl6YnI9V8lzahzDsYyoGYA075F3K/ovijYQUNw/BLuXpvmQ62YBTu6CDksUYPY8VOUxwa8F8IFJBePiyfoBLDTIkhQHnE6VgQOF61ZMyB4WwSzh0Oajr27pufhRG+Ioa6xPwbphgffddwer7ydk1VoW/2CO4Y51K9lD8BbP6Dlt7k1w1GWrNF4iXWUPV087VcTslcT3F9MyWYq3PhuZiXtflia67b7ad/MP66TK9I09y7z43QQOHD6ZyUa6QhK1x2l632A3T9M46aFEPfGk0ADMRMhpszEczRgLW4aclw1Ch8RwBOkSfqwAd1JP7llT9yVoOZQJMQKsX/9Gfnelq0pI8biH+nKJRwTi21qAmqoS64WXYlS9Z3m+yQWQ3c3Z0rvelYbwyNfyOSaYV24yv/p515PCPpTK84FM6NlYFvO/AvN0Y33L161WMUvJBp3m7BZAUYJAxKst1kPAu2D1IEhPZiWCwdR7xcp2WWbErLS0dQ1pYgf9rYxsGfL1iBYnPlK9wZ7DrpSWOAt16NQx6vuULC4IFj0KoDMJpcH4lZeRzSmXrZsczl7c0asIoLyV2+7cEteC/GEf2k71vwTTxOafE4E3530J4CtXG4=
   file_glob: true
-  file: target/release/$CRATE_NAME-*
+  file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
   on:
     condition: $TRAVIS_RUST_VERSION = $DEPLOY_VERSION
     tags: true
