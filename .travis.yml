@@ -8,7 +8,7 @@ env:
   global:
     - CRATE_NAME=kytan
     - DEPLOY_VERSION=stable
-    
+
     # Default job
     - TARGET=x86_64-unknown-linux-gnu
 
@@ -48,7 +48,7 @@ after_success: |
   echo "Uploaded code coverage"
 
 before_deploy:
-  - local src=$(pwd) stage=$(mktemp -d -t tmp)
+  - local src=$(pwd) stage=$(mktemp -d)
   - cp target/release/kytan $stage/
   - cd $stage && tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz * && cd $src
   - rm -rf $stage
