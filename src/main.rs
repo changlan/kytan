@@ -20,6 +20,7 @@ extern crate bincode;
 extern crate env_logger;
 extern crate dns_lookup;
 extern crate snap;
+extern crate rand;
 
 #[macro_use]
 extern crate nix;

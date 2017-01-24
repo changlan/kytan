@@ -17,6 +17,7 @@ use std::os::unix::io::AsRawFd;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
+use std::time;
 use mio;
 use dns_lookup;
 use bincode::SizeLimit;
@@ -24,14 +25,18 @@ use bincode::rustc_serialize::{encode, decode};
 use tuntap;
 use utils;
 use snap;
+use rand::{thread_rng, Rng};
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
+
+type Id = u8;
+type Token = u64;
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq, Debug)]
 enum Message {
     Request,
-    Response { id: u8 },
-    Data { id: u8, data: Vec<u8> },
+    Response { id: Id, token: Token },
+    Data { id: Id, token: Token, data: Vec<u8> },
 }
 
 const TUN: mio::Token = mio::Token(0);
@@ -58,7 +63,7 @@ fn create_tun_attempt() -> tuntap::Tun {
     attempt(0)
 }
 
-fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
+fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<(Id, Token), String> {
     let req_msg = Message::Request;
     let encoded_req_msg: Vec<u8> = try!(encode(&req_msg, SizeLimit::Infinite)
         .map_err(|e| e.to_string()));
@@ -78,7 +83,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<u8, String> {
 
     let resp_msg: Message = try!(decode(&buf[0..len]).map_err(|e| e.to_string()));
     match resp_msg {
-        Message::Response { id } => Ok(id),
+        Message::Response { id, token } => Ok((id, token)),
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
     }
 }
@@ -93,8 +98,10 @@ pub fn connect(host: &str, port: u16, default: bool) {
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
-    let id = initiate(&socket, &remote_addr).unwrap();
-    info!("Session established. Assigned IP address: 10.10.10.{}.", id);
+    let (id, token) = initiate(&socket, &remote_addr).unwrap();
+    info!("Session established with token {}. Assigned IP address: 10.10.10.{}.",
+          token,
+          id);
 
     info!("Bringing up TUN device.");
     let mut tun = create_tun_attempt();
@@ -142,16 +149,22 @@ pub fn connect(host: &str, port: u16, default: bool) {
                     let msg: Message = decode(&buf[0..len]).unwrap();
                     match msg {
                         Message::Request |
-                        Message::Response { id: _ } => {
-                            panic!("Invalid message {:?} from {}", msg, addr);
+                        Message::Response { id: _, token: _ } => {
+                            warn!("Invalid message {:?} from {}", msg, addr);
                         }
-                        Message::Data { id: _, data } => {
-                            let decompressed_data = decoder.decompress_vec(&data).unwrap();
-                            let data_len = decompressed_data.len();
-                            let mut sent_len = 0;
-                            while sent_len < data_len {
-                                sent_len += tun.write(&decompressed_data[sent_len..data_len])
-                                    .unwrap();
+                        Message::Data { id: _, token: server_token, data } => {
+                            if token == server_token {
+                                let decompressed_data = decoder.decompress_vec(&data).unwrap();
+                                let data_len = decompressed_data.len();
+                                let mut sent_len = 0;
+                                while sent_len < data_len {
+                                    sent_len += tun.write(&decompressed_data[sent_len..data_len])
+                                        .unwrap();
+                                }
+                            } else {
+                                warn!("Token mismatched. Received: {}. Expected: {}",
+                                      server_token,
+                                      token);
                             }
                         }
                     }
@@ -161,6 +174,7 @@ pub fn connect(host: &str, port: u16, default: bool) {
                     let data = &buf[0..len];
                     let msg = Message::Data {
                         id: id,
+                        token: token,
                         data: encoder.compress_vec(data).unwrap(),
                     };
                     let encoded_msg = encode(&msg, SizeLimit::Infinite).unwrap();
@@ -205,8 +219,10 @@ pub fn serve(port: u16) {
     poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
-    let mut available_ids: Vec<u8> = (2..254).collect();
-    let mut client_map: HashMap<u8, SocketAddr> = HashMap::new();
+
+    let mut rng = thread_rng();
+    let mut available_ids: Vec<Id> = (2..254).collect();
+    let mut client_info: HashMap<Id, (Token, time::Instant, SocketAddr)> = HashMap::new();
 
     let mut buf = [0u8; 1600];
     let mut encoder = snap::Encoder::new();
@@ -227,14 +243,19 @@ pub fn serve(port: u16) {
                     let msg: Message = decode(&buf[0..len]).unwrap();
                     match msg {
                         Message::Request => {
-                            let client_id: u8 = available_ids.pop().unwrap();
-                            client_map.insert(client_id, addr);
+                            let client_id: Id = available_ids.pop().unwrap();
+                            let client_token: Token = rng.gen::<Token>();
+
+                            client_info.insert(client_id, (client_token, time::Instant::now(), addr));
 
                             info!("Got request from {}. Assigning IP address: 10.10.10.{}.",
                                   addr,
                                   client_id);
 
-                            let reply = Message::Response { id: client_id };
+                            let reply = Message::Response {
+                                id: client_id,
+                                token: client_token,
+                            };
                             let encoded_reply = encode(&reply, SizeLimit::Infinite).unwrap();
                             let data_len = encoded_reply.len();
                             let mut sent_len = 0;
@@ -245,16 +266,34 @@ pub fn serve(port: u16) {
                                         .unwrap();
                             }
                         }
-                        Message::Response { id: _ } => {
+                        Message::Response { id: _, token: _ } => {
                             warn!("Invalid message {:?} from {}", msg, addr)
                         }
-                        Message::Data { id: _, data } => {
-                            let decompressed_data = decoder.decompress_vec(&data).unwrap();
-                            let data_len = decompressed_data.len();
-                            let mut sent_len = 0;
-                            while sent_len < data_len {
-                                sent_len += tun.write(&decompressed_data[sent_len..data_len])
-                                    .unwrap();
+                        Message::Data { id, token, data } => {
+                            match client_info.get_mut(&id) {
+                                None => warn!("Unknown data with token {} from id {}.", token, id),
+                                Some(&mut (t, ref mut i, _)) => {
+                                    if t != token {
+                                        warn!("Unknown data with mismatched token {} from id {}. \
+                                               Expected: {}",
+                                              token,
+                                              id,
+                                              t)
+                                    } else if i.elapsed() > time::Duration::from_secs(60) {
+                                        warn!("Expired data with token {} from id {}.", token, id)
+                                    } else {
+                                        *i = time::Instant::now();
+                                        let decompressed_data = decoder.decompress_vec(&data)
+                                            .unwrap();
+                                        let data_len = decompressed_data.len();
+                                        let mut sent_len = 0;
+                                        while sent_len < data_len {
+                                            sent_len +=
+                                                tun.write(&decompressed_data[sent_len..data_len])
+                                                    .unwrap();
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -264,15 +303,16 @@ pub fn serve(port: u16) {
                     let data = &buf[0..len];
                     let client_id: u8 = data[19];
 
-                    match client_map.get(&client_id) {
+                    match client_info.get(&client_id) {
                         None => warn!("Unknown IP packet from TUN for client {}.", client_id),
-                        Some(addr) => {
+                        Some(&(token, _, addr)) => {
                             let msg = Message::Data {
                                 id: client_id,
+                                token: token,
                                 data: encoder.compress_vec(data).unwrap(),
                             };
                             let encoded_msg = encode(&msg, SizeLimit::Infinite).unwrap();
-                            sockfd.send_to(&encoded_msg, addr).unwrap().unwrap();
+                            sockfd.send_to(&encoded_msg, &addr).unwrap().unwrap();
                         }
                     }
                 }
