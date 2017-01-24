@@ -32,7 +32,7 @@ use std::sync::atomic::Ordering;
 
 mod tuntap;
 mod utils;
-mod connection;
+mod network;
 
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
@@ -40,7 +40,7 @@ fn print_usage(program: &str, opts: getopts::Options) {
 }
 
 extern "C" fn handle_signal(_: i32) {
-    connection::INTERRUPTED.store(true, Ordering::Relaxed);
+    network::INTERRUPTED.store(true, Ordering::Relaxed);
 }
 
 fn main() {
@@ -79,10 +79,10 @@ fn main() {
     }
 
     match mode.as_ref() {
-        "s" => connection::serve(port),
+        "s" => network::serve(port),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            connection::connect(&host, port, true)
+            network::connect(&host, port, true)
         }
         _ => unreachable!(),
     };
