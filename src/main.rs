@@ -21,6 +21,7 @@ extern crate env_logger;
 extern crate dns_lookup;
 extern crate snap;
 extern crate rand;
+extern crate transient_hashmap;
 
 #[macro_use]
 extern crate nix;

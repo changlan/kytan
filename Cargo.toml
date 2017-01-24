@@ -15,3 +15,4 @@ dns-lookup = "*"
 nix = "*"
 snap = "*"
 rand = "*"
+transient-hashmap = { git = "https://github.com/debris/transient-hashmap" }

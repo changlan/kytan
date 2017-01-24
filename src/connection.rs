@@ -14,10 +14,8 @@
 
 use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
 use std::os::unix::io::AsRawFd;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
-use std::time;
 use mio;
 use dns_lookup;
 use bincode::SizeLimit;
@@ -26,6 +24,7 @@ use tuntap;
 use utils;
 use snap;
 use rand::{thread_rng, Rng};
+use transient_hashmap::TransientHashMap;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -222,7 +221,7 @@ pub fn serve(port: u16) {
 
     let mut rng = thread_rng();
     let mut available_ids: Vec<Id> = (2..254).collect();
-    let mut client_info: HashMap<Id, (Token, time::Instant, SocketAddr)> = HashMap::new();
+    let mut client_info: TransientHashMap<Id, (Token, SocketAddr)> = TransientHashMap::new(60);
 
     let mut buf = [0u8; 1600];
     let mut encoder = snap::Encoder::new();
@@ -233,6 +232,9 @@ pub fn serve(port: u16) {
         if INTERRUPTED.load(Ordering::Relaxed) {
             break;
         }
+
+        // Clear expired client info
+        available_ids.append(&mut client_info.prune());
 
         poll.poll(&mut events, None).unwrap();
 
@@ -246,7 +248,7 @@ pub fn serve(port: u16) {
                             let client_id: Id = available_ids.pop().unwrap();
                             let client_token: Token = rng.gen::<Token>();
 
-                            client_info.insert(client_id, (client_token, time::Instant::now(), addr));
+                            client_info.insert(client_id, (client_token, addr));
 
                             info!("Got request from {}. Assigning IP address: 10.10.10.{}.",
                                   addr,
@@ -270,19 +272,16 @@ pub fn serve(port: u16) {
                             warn!("Invalid message {:?} from {}", msg, addr)
                         }
                         Message::Data { id, token, data } => {
-                            match client_info.get_mut(&id) {
+                            match client_info.get(&id) {
                                 None => warn!("Unknown data with token {} from id {}.", token, id),
-                                Some(&mut (t, ref mut i, _)) => {
+                                Some(&(t, _)) => {
                                     if t != token {
                                         warn!("Unknown data with mismatched token {} from id {}. \
                                                Expected: {}",
                                               token,
                                               id,
-                                              t)
-                                    } else if i.elapsed() > time::Duration::from_secs(60) {
-                                        warn!("Expired data with token {} from id {}.", token, id)
+                                              t);
                                     } else {
-                                        *i = time::Instant::now();
                                         let decompressed_data = decoder.decompress_vec(&data)
                                             .unwrap();
                                         let data_len = decompressed_data.len();
@@ -305,7 +304,7 @@ pub fn serve(port: u16) {
 
                     match client_info.get(&client_id) {
                         None => warn!("Unknown IP packet from TUN for client {}.", client_id),
-                        Some(&(token, _, addr)) => {
+                        Some(&(token, addr)) => {
                             let msg = Message::Data {
                                 id: client_id,
                                 token: token,
