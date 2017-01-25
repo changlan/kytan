@@ -1,4 +1,5 @@
 sudo: required
+language: rust
 
 os:
   - linux
@@ -30,9 +31,6 @@ addons:
       - binutils-dev
       - gcc-multilib
 
-install:
-  - curl -sSf https://static.rust-lang.org/rustup.sh | bash -s -- --spec=stable -y
-
 script:
   - cargo build --release --verbose
   - RUSTFLAGS='-C link-dead-code' cargo test --verbose --no-run
@@ -50,7 +48,7 @@ after_success: |
   cd ../.. &&
   rm -rf kcov-master &&
   for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; sudo kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
-  sudo chown -R $USER .
+  sudo chown -R $USER . &&
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"; fi
 
