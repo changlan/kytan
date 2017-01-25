@@ -33,6 +33,7 @@ use std::sync::atomic::Ordering;
 mod tuntap;
 mod utils;
 mod network;
+mod packet;
 
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
