@@ -1,3 +1,4 @@
+sudo: required
 language: rust
 
 rust:
@@ -34,7 +35,7 @@ addons:
       - gcc-multilib
 
 script:
-  - RUSTFLAGS='-C link-dead-code' cargo test --verbose
+  - sudo RUSTFLAGS='-C link-dead-code' cargo test --verbose
   - cargo build --release --verbose
 
 after_success: |

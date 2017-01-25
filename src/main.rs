@@ -30,7 +30,7 @@ extern crate log;
 
 use std::sync::atomic::Ordering;
 
-mod tuntap;
+mod device;
 mod utils;
 mod network;
 mod packet;

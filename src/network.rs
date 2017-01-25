@@ -20,7 +20,7 @@ use mio;
 use dns_lookup;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
-use tuntap;
+use device;
 use utils;
 use snap;
 use rand::{thread_rng, Rng};
@@ -47,12 +47,12 @@ fn resolve(host: &str) -> Result<IpAddr, String> {
     Ok(ip)
 }
 
-fn create_tun_attempt() -> tuntap::Tun {
-    fn attempt(id: u8) -> tuntap::Tun {
+fn create_tun_attempt() -> device::Tun {
+    fn attempt(id: u8) -> device::Tun {
         match id {
             255 => panic!("Unable to create TUN device."),
             _ => {
-                match tuntap::Tun::create(id) {
+                match device::Tun::create(id) {
                     Ok(tun) => tun,
                     Err(_) => attempt(id + 1),
                 }
@@ -322,7 +322,12 @@ pub fn serve(port: u16) {
 }
 
 #[test]
-fn resolve_ip() {
+fn resolve_test() {
     assert_eq!(resolve("127.0.0.1").unwrap(),
                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+}
+
+#[test]
+fn create_tun_attempt_test() {
+    create_tun_attempt();
 }
