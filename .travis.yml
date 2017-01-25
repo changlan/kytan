@@ -34,6 +34,10 @@ addons:
       - binutils-dev
       - gcc-multilib
 
+install:
+  - curl -sL https://static.rust-lang.org/rustup.sh -o ~/rust-installer/rustup.sh
+  - sh ~/rust-installer/rustup.sh --spec=stable -y 2> /dev/null
+
 script:
   - sudo RUSTFLAGS='-C link-dead-code' cargo test --verbose
   - cargo build --release --verbose
