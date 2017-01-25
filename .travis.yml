@@ -38,6 +38,7 @@ script:
   - cargo build --release --verbose
 
 after_success: |
+  if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
   tar xzf master.tar.gz &&
   cd kcov-master &&
@@ -50,7 +51,7 @@ after_success: |
   rm -rf kcov-master &&
   for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
   bash <(curl -s https://codecov.io/bash) &&
-  echo "Uploaded code coverage"
+  echo "Uploaded code coverage"; fi
 
 before_deploy:
   - cp target/release/$CRATE_NAME $CRATE_NAME-$TRAVIS_TAG-$TARGET
