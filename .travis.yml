@@ -1,8 +1,4 @@
 sudo: required
-language: rust
-
-rust:
-- stable
 
 os:
   - linux
@@ -35,12 +31,11 @@ addons:
       - gcc-multilib
 
 install:
-  - curl -sL https://static.rust-lang.org/rustup.sh -o ~/rust-installer/rustup.sh
-  - sh ~/rust-installer/rustup.sh --spec=stable -y 2> /dev/null
+  - curl -sSf https://static.rust-lang.org/rustup.sh | bash -s -- --spec=stable -y
 
 script:
-  - sudo RUSTFLAGS='-C link-dead-code' cargo test --verbose
   - cargo build --release --verbose
+  - RUSTFLAGS='-C link-dead-code' cargo test --verbose --no-run
 
 after_success: |
   if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
@@ -54,7 +49,8 @@ after_success: |
   sudo make install &&
   cd ../.. &&
   rm -rf kcov-master &&
-  for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; sudo kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  sudo chown -R $USER .
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"; fi
 
