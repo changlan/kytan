@@ -34,6 +34,11 @@ pub fn enable_ipv4_forwarding() -> Result<(), String> {
     }
 }
 
+#[test]
+fn enable_ipv4_forwarding_test() {
+    enable_ipv4_forwarding().unwrap();
+}
+
 pub enum RouteType {
     Net,
     Host,
@@ -139,4 +144,11 @@ pub fn get_default_gateway() -> Result<String, String> {
     } else {
         Err(String::from_utf8(output.stderr).unwrap())
     }
+}
+
+#[test]
+fn gateway_test() {
+    let gw = get_default_gateway().unwrap();
+    add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
+    delete_route(RouteType::Host, "1.1.1.1").unwrap();
 }
