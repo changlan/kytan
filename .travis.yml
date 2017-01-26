@@ -34,7 +34,8 @@ addons:
 script:
   - cargo build --release --verbose
   - RUSTFLAGS='-C link-dead-code' cargo test --verbose --no-run
-  - for file in target/debug/$CRATE_NAME-*; do sudo ./$file; done
+  - shopt -s extglob
+  - for file in target/debug/$CRATE_NAME-*[0-9a-f]; do sudo ./$file; done
 
 after_success: |
   if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
