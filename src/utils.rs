@@ -75,18 +75,25 @@ pub fn delete_route(route_type: RouteType, route: &str) -> Result<(), String> {
         RouteType::Net => "-net",
         RouteType::Host => "-host",
     };
-    let cmd = if cfg!(target_os = "linux") {
-        format!("route -n del {} {}", mode, route)
+    let status = if cfg!(target_os = "linux") {
+        Command::new("route")
+            .arg("-n")
+            .arg("del")
+            .arg(mode)
+            .arg(route)
+            .status()
+            .unwrap()
     } else if cfg!(target_os = "macos") {
-        format!("route -n delete {} {}", mode, route)
+        Command::new("route")
+            .arg("-n")
+            .arg("delete")
+            .arg(mode)
+            .arg(route)
+            .status()
+            .unwrap()
     } else {
         unimplemented!()
     };
-    let status = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .unwrap();
     if status.success() {
         Ok(())
     } else {
@@ -99,18 +106,28 @@ pub fn add_route(route_type: RouteType, route: &str, gateway: &str) -> Result<()
         RouteType::Net => "-net",
         RouteType::Host => "-host",
     };
-    let cmd = if cfg!(target_os = "linux") {
-        format!("route -n add {} {} gw {}", mode, route, gateway)
+    let status = if cfg!(target_os = "linux") {
+        Command::new("route")
+            .arg("-n")
+            .arg("add")
+            .arg(mode)
+            .arg(route)
+            .arg("gw")
+            .arg(gateway)
+            .status()
+            .unwrap()
     } else if cfg!(target_os = "macos") {
-        format!("route -n add {} {} {}", mode, route, gateway)
+        Command::new("route")
+            .arg("-n")
+            .arg("add")
+            .arg(mode)
+            .arg(route)
+            .arg(gateway)
+            .status()
+            .unwrap()
     } else {
         unimplemented!()
     };
-    let status = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .unwrap();
     if status.success() {
         Ok(())
     } else {
@@ -147,7 +164,12 @@ pub fn get_default_gateway() -> Result<String, String> {
 }
 
 #[test]
-fn gateway_test() {
+fn get_default_gateway_test() {
+    get_default_gateway().unwrap();
+}
+
+#[test]
+fn route_test() {
     let gw = get_default_gateway().unwrap();
     add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
     delete_route(RouteType::Host, "1.1.1.1").unwrap();
