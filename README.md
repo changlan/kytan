@@ -14,7 +14,10 @@ multi-platform support.
 
 ### Installation
 
-Currently, `kytan` is in pre-alpha stage. You can compile it from source if
+Currently, precompiled `kytan` binaries are available for Linux and macOS.
+You can download them from [releases](https://github.com/changlan/kytan/releases).
+
+Alternatively, you can compile it from source if
 your machine is installed with [Rust](https://www.rust-lang.org/en-US/install.html).
 
 ```
