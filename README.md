@@ -21,7 +21,7 @@ Alternatively, you can compile it from source if
 your machine is installed with [Rust](https://www.rust-lang.org/en-US/install.html).
 
 ```
-$ git clone git@github.com:changlan/kytan.git
+$ git clone https://github.com/changlan/kytan.git
 $ cd kytan
 $ cargo build --release
 ```
