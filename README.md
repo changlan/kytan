@@ -42,7 +42,7 @@ future, `kytan` will automate these steps. You may change `eth0` to the
 interface name on your server:
 
 ```
-$ sudo iptables -t nat -A POSTROUTING -s 10.10.0.0/24 -o eth0 -j MASQUERADE
+$ sudo iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o eth0 -j MASQUERADE
 ```
 
 To run `kytan` in server mode and listen on UDP port `9527`:
