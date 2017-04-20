@@ -49,7 +49,7 @@ after_success: |
   sudo make install &&
   cd ../.. &&
   rm -rf kcov-master &&
-  for file in target/debug/$CRATE_NAME-*; do mkdir -p "target/cov/$(basename $file)"; sudo kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  for file in target/debug/$CRATE_NAME-*[^.d]; do mkdir -p "target/cov/$(basename $file)"; sudo kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
   sudo chown -R $USER . &&
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"; fi
