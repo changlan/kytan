@@ -15,8 +15,11 @@
 extern crate libc;
 extern crate getopts;
 extern crate mio;
-extern crate rustc_serialize;
+
+#[macro_use]
+extern crate serde_derive;
 extern crate bincode;
+
 extern crate env_logger;
 extern crate dns_lookup;
 extern crate snap;
