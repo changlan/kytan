@@ -325,6 +325,7 @@ fn resolve_test() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn initiate_test() {
     assert!(utils::is_root());
 
