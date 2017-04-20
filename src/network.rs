@@ -114,7 +114,7 @@ pub fn connect(host: &str, port: u16, default: bool) {
     poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     info!("Setting up socket for polling.");
-    let sockfd = mio::udp::UdpSocket::from_socket(socket).unwrap();
+    let sockfd = mio::net::UdpSocket::from_socket(socket).unwrap();
     poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
@@ -142,7 +142,7 @@ pub fn connect(host: &str, port: u16, default: bool) {
         for event in events.iter() {
             match event.token() {
                 SOCK => {
-                    let (len, addr) = sockfd.recv_from(&mut buf).unwrap().unwrap();
+                    let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
                     let msg: Message = deserialize(&buf[0..len]).unwrap();
                     match msg {
                         Message::Request |
@@ -179,7 +179,6 @@ pub fn connect(host: &str, port: u16, default: bool) {
                     let mut sent_len = 0;
                     while sent_len < data_len {
                         sent_len += sockfd.send_to(&encoded_msg[sent_len..data_len], &remote_addr)
-                            .unwrap()
                             .unwrap();
                     }
                 }
@@ -208,7 +207,7 @@ pub fn serve(port: u16) {
           tun.name());
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-    let sockfd = mio::udp::UdpSocket::bind(&addr).unwrap();
+    let sockfd = mio::net::UdpSocket::bind(&addr).unwrap();
     info!("Listening on: 0.0.0.0:{}.", port);
 
     let poll = mio::Poll::new().unwrap();
@@ -239,7 +238,7 @@ pub fn serve(port: u16) {
         for event in events.iter() {
             match event.token() {
                 SOCK => {
-                    let (len, addr) = sockfd.recv_from(&mut buf).unwrap().unwrap();
+                    let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
                     let msg: Message = deserialize(&buf[0..len]).unwrap();
                     match msg {
                         Message::Request => {
@@ -262,7 +261,6 @@ pub fn serve(port: u16) {
                             while sent_len < data_len {
                                 sent_len +=
                                     sockfd.send_to(&encoded_reply[sent_len..data_len], &addr)
-                                        .unwrap()
                                         .unwrap();
                             }
                         }
@@ -309,7 +307,7 @@ pub fn serve(port: u16) {
                                 data: encoder.compress_vec(data).unwrap(),
                             };
                             let encoded_msg = serialize(&msg, Infinite).unwrap();
-                            sockfd.send_to(&encoded_msg, &addr).unwrap().unwrap();
+                            sockfd.send_to(&encoded_msg, &addr).unwrap();
                         }
                     }
                 }

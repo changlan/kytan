@@ -26,7 +26,6 @@ extern crate snap;
 extern crate rand;
 extern crate transient_hashmap;
 
-#[macro_use]
 extern crate nix;
 #[macro_use]
 extern crate log;
