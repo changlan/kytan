@@ -249,8 +249,6 @@ impl Read for Tun {
         self.handle.read(buf)
     }
 
-
-
     #[cfg(target_os = "macos")]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut data = [0u8; 1600];
@@ -289,4 +287,18 @@ impl Write for Tun {
     fn flush(&mut self) -> io::Result<()> {
         self.handle.flush()
     }
+}
+
+#[test]
+fn create_tun_test() {
+    let tun = Tun::create(10).unwrap();
+    let name = tun.name();
+
+    let status = process::Command::new("ifconfig")
+        .arg(name)
+        .status()
+        .expect("failed to create tun device");
+    assert!(status.success());
+
+    tun.up(1);
 }
