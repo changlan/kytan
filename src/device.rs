@@ -17,6 +17,7 @@ use libc;
 use libc::c_ulong;
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
+use utils;
 
 const MTU: &'static str = "1380";
 
@@ -291,14 +292,16 @@ impl Write for Tun {
 
 #[test]
 fn create_tun_test() {
+    assert!(utils::is_root());
+
     let tun = Tun::create(10).unwrap();
     let name = tun.name();
 
-    let status = process::Command::new("ifconfig")
+    let output = process::Command::new("ifconfig")
         .arg(name)
-        .status()
+        .output()
         .expect("failed to create tun device");
-    assert!(status.success());
+    assert!(output.status.success());
 
     tun.up(1);
 }

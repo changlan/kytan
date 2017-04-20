@@ -16,6 +16,7 @@ use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
+use std::thread;
 use mio;
 use dns_lookup;
 use bincode::{serialize, deserialize, Infinite};
@@ -324,6 +325,19 @@ fn resolve_test() {
 }
 
 #[test]
-fn create_tun_attempt_test() {
-    create_tun_attempt();
+fn initiate_test() {
+    assert!(utils::is_root());
+
+    let server = thread::spawn(move || serve(8964));
+    thread::sleep_ms(1000);
+
+    let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
+
+    let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+    let local_socket = UdpSocket::bind(&local_addr).unwrap();
+
+    let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
+    assert_eq!(id, 253);
+
+    INTERRUPTED.store(true, Ordering::Relaxed);
 }

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate libc;
 extern crate getopts;
 extern crate mio;
+extern crate libc;
 
 #[macro_use]
 extern crate serde_derive;
@@ -49,7 +49,7 @@ extern "C" fn handle_signal(_: i32) {
 fn main() {
     env_logger::init().unwrap();
 
-    if unsafe { libc::geteuid() != 0 } {
+    if !utils::is_root() {
         panic!("Please run as root");
     }
 

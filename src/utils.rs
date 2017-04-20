@@ -13,6 +13,11 @@
 // limitations under the License.
 
 use std::process::Command;
+use libc;
+
+pub fn is_root() -> bool {
+    unsafe { libc::geteuid() == 0 }
+}
 
 pub fn enable_ipv4_forwarding() -> Result<(), String> {
     let sysctl_arg = if cfg!(target_os = "linux") {
@@ -170,6 +175,8 @@ fn get_default_gateway_test() {
 
 #[test]
 fn route_test() {
+    assert!(is_root());
+
     let gw = get_default_gateway().unwrap();
     add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
     delete_route(RouteType::Host, "1.1.1.1").unwrap();
