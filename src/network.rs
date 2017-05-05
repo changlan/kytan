@@ -27,6 +27,8 @@ use rand::{thread_rng, Rng};
 use transient_hashmap::TransientHashMap;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
+static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
+static LISTENING: AtomicBool = ATOMIC_BOOL_INIT;
 
 type Id = u8;
 type Token = u64;
@@ -131,6 +133,7 @@ pub fn connect(host: &str, port: u16, default: bool) {
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
 
+    CONNECTED.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
 
     loop {
@@ -224,6 +227,8 @@ pub fn serve(port: u16) {
     let mut buf = [0u8; 1600];
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
+
+    LISTENING.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
 
     loop {
@@ -326,19 +331,25 @@ fn resolve_test() {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn initiate_test() {
+fn integration_test() {
     assert!(utils::is_root());
 
     let server = thread::spawn(move || serve(8964));
+
     thread::sleep_ms(1000);
+    assert!(LISTENING.load(Ordering::Relaxed));
 
     let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
-
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
     let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
     let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
     assert_eq!(id, 253);
+
+    let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
+
+    thread::sleep_ms(1000);
+    assert!(CONNECTED.load(Ordering::Relaxed));
 
     INTERRUPTED.store(true, Ordering::Relaxed);
 }
