@@ -27,6 +27,7 @@ pub fn enable_ipv4_forwarding() -> Result<(), String> {
     } else {
         unimplemented!()
     };
+    info!("Enabling IPv4 Forwarding.");
     let status = Command::new("sysctl")
         .arg("-w")
         .arg(sysctl_arg)
@@ -57,6 +58,7 @@ pub struct DefaultGateway {
 impl DefaultGateway {
     pub fn create(gateway: &str, remote: &str) -> DefaultGateway {
         let origin = get_default_gateway().unwrap();
+        info!("Original default gateway: {}.", origin);
         add_route(RouteType::Host, remote, &origin).unwrap();
         delete_default_gateway().unwrap();
         set_default_gateway(gateway).unwrap();
@@ -80,6 +82,7 @@ pub fn delete_route(route_type: RouteType, route: &str) -> Result<(), String> {
         RouteType::Net => "-net",
         RouteType::Host => "-host",
     };
+    info!("Deleting route: {} {}.", mode, route);
     let status = if cfg!(target_os = "linux") {
         Command::new("route")
             .arg("-n")
@@ -111,6 +114,7 @@ pub fn add_route(route_type: RouteType, route: &str, gateway: &str) -> Result<()
         RouteType::Net => "-net",
         RouteType::Host => "-host",
     };
+    info!("Adding route: {} {} gateway {}.", mode, route, gateway);
     let status = if cfg!(target_os = "linux") {
         Command::new("route")
             .arg("-n")
@@ -162,7 +166,7 @@ pub fn get_default_gateway() -> Result<String, String> {
         .output()
         .unwrap();
     if output.status.success() {
-        Ok(String::from_utf8(output.stdout).unwrap())
+        Ok(String::from_utf8(output.stdout).unwrap().trim_right().to_string())
     } else {
         Err(String::from_utf8(output.stderr).unwrap())
     }
