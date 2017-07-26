@@ -13,15 +13,12 @@
 // limitations under the License.
 
 use std::{fs, process, io};
-use libc;
-use libc::c_ulong;
+use libc::*;
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
 
 const MTU: &'static str = "1380";
 
-#[cfg(target_os = "linux")]
-use libc::c_short;
 #[cfg(target_os = "linux")]
 use std::path;
 #[cfg(target_os = "linux")]
@@ -33,12 +30,6 @@ const IFF_NO_PI: c_short = 0x1000;
 #[cfg(target_os = "linux")]
 const TUNSETIFF: c_ulong = 0x400454ca; // TODO: use _IOW('T', 202, int)
 
-#[cfg(target_os = "macos")]
-use nix;
-#[cfg(target_os = "macos")]
-use nix::fcntl::*;
-#[cfg(target_os = "macos")]
-use libc::{c_int, socklen_t, c_void};
 #[cfg(target_os = "macos")]
 use std::mem;
 #[cfg(target_os = "macos")]
@@ -110,7 +101,7 @@ impl Tun {
             ifr_flags: IFF_TUN | IFF_NO_PI,
         };
 
-        let res = unsafe { libc::ioctl(file.as_raw_fd(), TUNSETIFF, &mut req) }; // TUNSETIFF
+        let res = unsafe { ioctl(file.as_raw_fd(), TUNSETIFF, &mut req) }; // TUNSETIFF
         if res < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -126,7 +117,7 @@ impl Tun {
     #[cfg(target_os = "macos")]
     pub fn create(name: u8) -> Result<Tun, io::Error> {
         let handle = {
-            let fd = unsafe { libc::socket(PF_SYSTEM, libc::SOCK_DGRAM, SYSPROTO_CONTROL) };
+            let fd = unsafe { socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL) };
             if fd < 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -142,9 +133,9 @@ impl Tun {
             },
         };
 
-        let res = unsafe { libc::ioctl(handle.as_raw_fd(), CTLIOCGINFO, &mut info) };
+        let res = unsafe { ioctl(handle.as_raw_fd(), CTLIOCGINFO, &mut info) };
         if res != 0 {
-            nix::unistd::close(handle.as_raw_fd()).unwrap();
+            // Files are automatically closed when they go out of scope.
             return Err(io::Error::last_os_error());
         }
 
@@ -161,9 +152,9 @@ impl Tun {
         // is our sc_unit-1
         let res = unsafe {
             let addr_ptr = &addr as *const sockaddr_ctl;
-            libc::connect(handle.as_raw_fd(),
-                          addr_ptr as *const libc::sockaddr,
-                          mem::size_of_val(&addr) as socklen_t)
+            connect(handle.as_raw_fd(),
+                    addr_ptr as *const sockaddr,
+                    mem::size_of_val(&addr) as socklen_t)
         };
         if res != 0 {
             return Err(io::Error::last_os_error());
@@ -172,18 +163,25 @@ impl Tun {
         let mut name_buf = [0u8; 64];
         let mut name_length: socklen_t = 64;
         let res = unsafe {
-            libc::getsockopt(handle.as_raw_fd(),
-                             SYSPROTO_CONTROL,
-                             UTUN_OPT_IFNAME,
-                             &mut name_buf as *mut _ as *mut c_void,
-                             &mut name_length as *mut socklen_t)
+            getsockopt(handle.as_raw_fd(),
+                       SYSPROTO_CONTROL,
+                       UTUN_OPT_IFNAME,
+                       &mut name_buf as *mut _ as *mut c_void,
+                       &mut name_length as *mut socklen_t)
         };
         if res != 0 {
             return Err(io::Error::last_os_error());
         }
 
-        try!(fcntl(handle.as_raw_fd(), FcntlArg::F_SETFL(O_NONBLOCK)));
-        try!(fcntl(handle.as_raw_fd(), FcntlArg::F_SETFD(FD_CLOEXEC)));
+        let res = unsafe { fcntl(handle.as_raw_fd(), F_SETFL, O_NONBLOCK) };
+        if res == -1 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let res = unsafe { fcntl(handle.as_raw_fd(), F_SETFD, FD_CLOEXEC) };
+        if res == -1 {
+            return Err(io::Error::last_os_error());
+        }
 
         let tun = Tun {
             handle: handle,
