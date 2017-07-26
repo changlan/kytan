@@ -17,7 +17,6 @@ use libc;
 use libc::c_ulong;
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::io::{Write, Read};
-use utils;
 
 const MTU: &'static str = "1380";
 
@@ -289,6 +288,9 @@ impl Write for Tun {
         self.handle.flush()
     }
 }
+
+#[test]
+use utils;
 
 #[test]
 fn create_tun_test() {

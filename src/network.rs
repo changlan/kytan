@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
+use std::net::{SocketAddr, IpAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
-use std::thread;
 use mio;
 use dns_lookup;
 use bincode::{serialize, deserialize, Infinite};
@@ -322,6 +321,12 @@ pub fn serve(port: u16) {
         }
     }
 }
+
+#[test]
+use std::net::Ipv4Addr;
+
+#[test]
+use std::thread;
 
 #[test]
 fn resolve_test() {
