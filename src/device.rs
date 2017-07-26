@@ -289,21 +289,25 @@ impl Write for Tun {
     }
 }
 
-#[test]
-use utils;
+#[cfg(test)]
+mod tests {
+    use std::process;
+    use utils;
+    use device::*;
 
-#[test]
-fn create_tun_test() {
-    assert!(utils::is_root());
+    #[test]
+    fn create_tun_test() {
+        assert!(utils::is_root());
 
-    let tun = Tun::create(10).unwrap();
-    let name = tun.name();
+        let tun = Tun::create(10).unwrap();
+        let name = tun.name();
 
-    let output = process::Command::new("ifconfig")
-        .arg(name)
-        .output()
-        .expect("failed to create tun device");
-    assert!(output.status.success());
+        let output = process::Command::new("ifconfig")
+            .arg(name)
+            .output()
+            .expect("failed to create tun device");
+        assert!(output.status.success());
 
-    tun.up(1);
+        tun.up(1);
+    }
 }

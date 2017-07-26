@@ -115,50 +115,56 @@ pub fn udptcp_cksum<T>(ip: &Ipv4Header, l4: &T) -> u16 {
     cksum as u16
 }
 
-#[test]
-fn raw_cksum_test() {
-    assert_eq!(raw_cksum(&[] as *const u8, 0), 0);
-    assert_eq!(raw_cksum(&[1u8] as *const u8, 1), 1);
-    assert_eq!(raw_cksum(&[1u8, 2u8] as *const u8, 2), 2 * 256 + 1);
-    assert_eq!(raw_cksum(&[1u8, 2u8, 3u8] as *const u8, 3), 2 * 256 + 1 + 3);
-}
+#[cfg(test)]
+mod tests {
+    use packet::*;
 
-#[test]
-fn ipv4_cksum_test() {
-    let ip = Ipv4Header {
-        version_ihl: 0,
-        type_of_service: 0,
-        total_length: 0,
-        identification: 0,
-        flags_fragment_offset: 0,
-        time_to_live: 0,
-        protocol: 0,
-        header_checksum: 0,
-        source_address: 0,
-        destination_address: 0,
-    };
-    assert_eq!(ipv4_cksum(&ip), !0);
-}
+    #[test]
+    fn raw_cksum_test() {
+        assert_eq!(raw_cksum(&[] as *const u8, 0), 0);
+        assert_eq!(raw_cksum(&[1u8] as *const u8, 1), 1);
+        assert_eq!(raw_cksum(&[1u8, 2u8] as *const u8, 2), 2 * 256 + 1);
+        assert_eq!(raw_cksum(&[1u8, 2u8, 3u8] as *const u8, 3), 2 * 256 + 1 + 3);
+    }
 
-#[test]
-fn udptcp_cksum_test() {
-    let ip = Ipv4Header {
-        version_ihl: 0,
-        type_of_service: 0,
-        total_length: ((mem::size_of::<Ipv4Header>() + mem::size_of::<UdpHeader>()) as u16).to_be(),
-        identification: 0,
-        flags_fragment_offset: 0,
-        time_to_live: 0,
-        protocol: 0,
-        header_checksum: 0,
-        source_address: 0,
-        destination_address: 0,
-    };
-    let udp = UdpHeader {
-        source_port: 0,
-        destination_port: 0,
-        total_length: (mem::size_of::<UdpHeader>() as u16).to_be(),
-        checksum: 0,
-    };
-    assert_eq!(udptcp_cksum(&ip, &udp), 0xefff);
+    #[test]
+    fn ipv4_cksum_test() {
+        let ip = Ipv4Header {
+            version_ihl: 0,
+            type_of_service: 0,
+            total_length: 0,
+            identification: 0,
+            flags_fragment_offset: 0,
+            time_to_live: 0,
+            protocol: 0,
+            header_checksum: 0,
+            source_address: 0,
+            destination_address: 0,
+        };
+        assert_eq!(ipv4_cksum(&ip), !0);
+    }
+
+    #[test]
+    fn udptcp_cksum_test() {
+        let ip = Ipv4Header {
+            version_ihl: 0,
+            type_of_service: 0,
+            total_length: ((mem::size_of::<Ipv4Header>() + mem::size_of::<UdpHeader>()) as u16)
+                .to_be(),
+            identification: 0,
+            flags_fragment_offset: 0,
+            time_to_live: 0,
+            protocol: 0,
+            header_checksum: 0,
+            source_address: 0,
+            destination_address: 0,
+        };
+        let udp = UdpHeader {
+            source_port: 0,
+            destination_port: 0,
+            total_length: (mem::size_of::<UdpHeader>() as u16).to_be(),
+            checksum: 0,
+        };
+        assert_eq!(udptcp_cksum(&ip, &udp), 0xefff);
+    }
 }

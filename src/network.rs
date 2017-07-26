@@ -326,39 +326,42 @@ pub fn serve(port: u16) {
     }
 }
 
-#[test]
-use std::net::Ipv4Addr;
+#[cfg(test)]
+mod tests {
+    use std::net::Ipv4Addr;
+    use network::*;
 
-#[test]
-use std::thread;
+    #[cfg(target_os = "linux")]
+    use std::thread;
 
-#[test]
-fn resolve_test() {
-    assert_eq!(resolve("127.0.0.1").unwrap(),
-               IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-}
+    #[test]
+    fn resolve_test() {
+        assert_eq!(resolve("127.0.0.1").unwrap(),
+                   IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    }
 
-#[test]
-#[cfg(target_os = "linux")]
-fn integration_test() {
-    assert!(utils::is_root());
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn integration_test() {
+        assert!(utils::is_root());
 
-    let server = thread::spawn(move || serve(8964));
+        let server = thread::spawn(move || serve(8964));
 
-    thread::sleep_ms(1000);
-    assert!(LISTENING.load(Ordering::Relaxed));
+        thread::sleep_ms(1000);
+        assert!(LISTENING.load(Ordering::Relaxed));
 
-    let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
-    let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-    let local_socket = UdpSocket::bind(&local_addr).unwrap();
+        let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
+        let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+        let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-    let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
-    assert_eq!(id, 253);
+        let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
+        assert_eq!(id, 253);
 
-    let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
+        let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
 
-    thread::sleep_ms(1000);
-    assert!(CONNECTED.load(Ordering::Relaxed));
+        thread::sleep_ms(1000);
+        assert!(CONNECTED.load(Ordering::Relaxed));
 
-    INTERRUPTED.store(true, Ordering::Relaxed);
+        INTERRUPTED.store(true, Ordering::Relaxed);
+    }
 }

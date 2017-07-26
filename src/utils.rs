@@ -184,16 +184,21 @@ pub fn get_public_ip() -> Result<String, String> {
     }
 }
 
-#[test]
-fn get_default_gateway_test() {
-    get_default_gateway().unwrap();
-}
+#[cfg(test)]
+mod tests {
+    use utils::*;
 
-#[test]
-fn route_test() {
-    assert!(is_root());
+    #[test]
+    fn get_default_gateway_test() {
+        get_default_gateway().unwrap();
+    }
 
-    let gw = get_default_gateway().unwrap();
-    add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
-    delete_route(RouteType::Host, "1.1.1.1").unwrap();
+    #[test]
+    fn route_test() {
+        assert!(is_root());
+
+        let gw = get_default_gateway().unwrap();
+        add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
+        delete_route(RouteType::Host, "1.1.1.1").unwrap();
+    }
 }
