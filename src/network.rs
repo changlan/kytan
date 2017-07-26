@@ -195,7 +195,11 @@ pub fn serve(port: u16) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }
+
     info!("Working in server mode.");
+
+    let public_ip = utils::get_public_ip().unwrap();
+    info!("Public IP: {}", public_ip);
 
     info!("Enabling kernel's IPv4 forwarding.");
     utils::enable_ipv4_forwarding().unwrap();

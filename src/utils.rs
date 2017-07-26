@@ -172,6 +172,18 @@ pub fn get_default_gateway() -> Result<String, String> {
     }
 }
 
+pub fn get_public_ip() -> Result<String, String> {
+    let output = Command::new("curl")
+        .arg("ipecho.net/plain")
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout).unwrap())
+    } else {
+        Err(String::from_utf8(output.stderr).unwrap())
+    }
+}
+
 #[test]
 fn get_default_gateway_test() {
     get_default_gateway().unwrap();
