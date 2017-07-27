@@ -26,10 +26,12 @@ extern crate snap;
 extern crate rand;
 extern crate transient_hashmap;
 
+extern crate nix;
 #[macro_use]
 extern crate log;
-
+extern crate ring;
 use std::sync::atomic::Ordering;
+use ring::rand::{SystemRandom, SecureRandom};
 
 mod device;
 mod utils;
@@ -41,7 +43,7 @@ fn print_usage(program: &str, opts: getopts::Options) {
     print!("{}", opts.usage(&brief));
 }
 
-extern "C" fn handle_signal(_: libc::c_int) {
+extern "C" fn handle_signal(_: i32) {
     network::INTERRUPTED.store(true, Ordering::Relaxed);
 }
 
@@ -71,16 +73,25 @@ fn main() {
     let mode = matches.opt_str("m").unwrap();
     let port: u16 = matches.opt_str("p").unwrap_or(String::from("8964")).parse().unwrap();
 
+    let sig_action =
+        nix::sys::signal::SigAction::new(nix::sys::signal::SigHandler::Handler(handle_signal),
+                                         nix::sys::signal::SaFlags::empty(),
+                                         nix::sys::signal::SigSet::empty());
     unsafe {
-        libc::signal(libc::SIGINT, handle_signal as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
+        nix::sys::signal::sigaction(nix::sys::signal::SIGINT, &sig_action).unwrap();
+        nix::sys::signal::sigaction(nix::sys::signal::SIGTERM, &sig_action).unwrap();
     }
-
+	
+	let (sealing_key, opening_key) = network::key_derivation();
+	let mut nonce = vec![0; 12];
+	let rand = SystemRandom::new();
+	rand.fill(&mut nonce).unwrap();
+	
     match mode.as_ref() {
-        "s" => network::serve(port),
+        "s" => network::serve(port, &sealing_key, &opening_key, &nonce),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            network::connect(&host, port, true)
+            network::connect(&host, port, true, &sealing_key, &opening_key, &nonce)
         }
         _ => unreachable!(),
     };
