@@ -11,11 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use std::net::{SocketAddr, IpAddr, UdpSocket};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
+use std::thread;
 use mio;
 use dns_lookup;
 use bincode::{serialize, deserialize, Infinite};
@@ -24,13 +24,23 @@ use utils;
 use snap;
 use rand::{thread_rng, Rng};
 use transient_hashmap::TransientHashMap;
+use ring::rand::{SystemRandom, SecureRandom};
+use ring::{aead, pbkdf2, digest};
+
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
 static LISTENING: AtomicBool = ATOMIC_BOOL_INIT;
+static DIGEST_ALG: &'static digest::Algorithm = &digest::SHA256;
+
+
 
 type Id = u8;
 type Token = u64;
+
+type Sealing = aead::SealingKey;
+type Opening = aead::OpeningKey;
+
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 enum Message {
@@ -63,32 +73,55 @@ fn create_tun_attempt() -> device::Tun {
     attempt(0)
 }
 
-fn initiate(socket: &UdpSocket, addr: &SocketAddr) -> Result<(Id, Token), String> {
+fn initiate(socket: &UdpSocket, addr: &SocketAddr, sealing_key: &Sealing, opening_key: &Opening, nonce: &Vec<u8>) -> Result<(Id, Token), String> {
     let req_msg = Message::Request;
     let encoded_req_msg: Vec<u8> = try!(serialize(&req_msg, Infinite).map_err(|e| e.to_string()));
-
-    let mut remaining_len = encoded_req_msg.len();
+	let mut encrypted_req_msg = encoded_req_msg.clone();
+	//info!("{} {:x} {:x}",encoded_req_msg.len(), encoded_req_msg[0],encoded_req_msg[1]);
+	let tag_len = aead::CHACHA20_POLY1305.tag_len();
+	for _ in 0..tag_len {
+		encrypted_req_msg.push(0);
+	}
+	//info!("{} {:x} {:x}",encrypted_req_msg.len(), encrypted_req_msg[0],encrypted_req_msg[1]);
+	let additional_data = b"ychen".to_vec();
+	let mut remaining_len = aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut encrypted_req_msg, tag_len).unwrap();
+	//info!("encrypted_req_msg: {} {:x} {:x}", remaining_len, encrypted_req_msg[0], encrypted_req_msg[1]);
     while remaining_len > 0 {
-        let sent_bytes = try!(socket.send_to(&encoded_req_msg, addr)
+        let sent_bytes = try!(socket.send_to(&encrypted_req_msg, addr)
             .map_err(|e| e.to_string()));
         remaining_len -= sent_bytes;
     }
     info!("Request sent to {}.", addr);
 
     let mut buf = [0u8; 1600];
+	info!("exception!!!!");
     let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
     assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
-
-    let resp_msg: Message = try!(deserialize(&buf[0..len]).map_err(|e| e.to_string()));
+	let decrypted_buf = aead::open_in_place(&opening_key, &nonce, &additional_data, 0, &mut buf).unwrap();
+    let resp_msg: Message = try!(deserialize(&decrypted_buf[0..len]).map_err(|e| e.to_string()));
     match resp_msg {
         Message::Response { id, token } => Ok((id, token)),
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
     }
 }
 
+pub fn key_derivation() -> (Sealing, Opening) {
+	let password = b"random password";
+	let mut salt = vec![0; 64];
+	let rand = SystemRandom::new();
+	rand.fill(&mut salt).unwrap();
+	let mut key = [0; 32];
+	pbkdf2::derive(DIGEST_ALG, 1024, &salt, &password[..], &mut key);
 
-pub fn connect(host: &str, port: u16, default: bool) {
+	let sealing_key = aead::SealingKey::new(&aead::CHACHA20_POLY1305, &key).unwrap();
+	let opening_key = aead::OpeningKey::new(&aead::CHACHA20_POLY1305, &key).unwrap();
+	info!("key derivated.");
+	(sealing_key, opening_key)
+}
+
+
+pub fn connect(host: &str, port: u16, default: bool, sealing_key: &Sealing, opening_key: &Opening, nonce: &Vec<u8>) {
     info!("Working in client mode.");
     let remote_ip = resolve(host).unwrap();
     let remote_addr = SocketAddr::new(remote_ip, port);
@@ -97,7 +130,7 @@ pub fn connect(host: &str, port: u16, default: bool) {
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
-    let (id, token) = initiate(&socket, &remote_addr).unwrap();
+    let (id, token) = initiate(&socket, &remote_addr, &sealing_key, &opening_key, &nonce).unwrap();
     info!("Session established with token {}. Assigned IP address: 10.10.10.{}.",
           token,
           id);
@@ -131,6 +164,8 @@ pub fn connect(host: &str, port: u16, default: bool) {
 
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
+	
+	let additional_data = b"ychen".to_vec();
 
     CONNECTED.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
@@ -146,7 +181,8 @@ pub fn connect(host: &str, port: u16, default: bool) {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
-                    let msg: Message = deserialize(&buf[0..len]).unwrap();
+					let decrypted_buf = aead::open_in_place(&opening_key, &nonce, &additional_data, 0, &mut buf).unwrap();
+                    let msg: Message = deserialize(&decrypted_buf[0..len]).unwrap();
                     match msg {
                         Message::Request |
                         Message::Response { id: _, token: _ } => {
@@ -177,13 +213,22 @@ pub fn connect(host: &str, port: u16, default: bool) {
                         token: token,
                         data: encoder.compress_vec(data).unwrap(),
                     };
+					
                     let encoded_msg = serialize(&msg, Infinite).unwrap();
-                    let data_len = encoded_msg.len();
+					let mut encrypted_msg = encoded_msg.clone();
+					let tag_len = aead::CHACHA20_POLY1305.tag_len();
+					for _ in 0..tag_len {
+						encrypted_msg.push(0);
+					}
+					aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut encrypted_msg, tag_len).unwrap();
+                    let data_len = encrypted_msg.len();
                     let mut sent_len = 0;
                     while sent_len < data_len {
-                        sent_len += sockfd.send_to(&encoded_msg[sent_len..data_len], &remote_addr)
+                        sent_len += sockfd.send_to(&encrypted_msg[sent_len..data_len], &remote_addr)
                             .unwrap();
                     }
+					info!("encoded_msg: {:x}", encoded_msg[10]);
+					info!("encrypted_msg: {:x}", encrypted_msg[10]);
                 }
                 _ => unreachable!(),
             }
@@ -191,15 +236,11 @@ pub fn connect(host: &str, port: u16, default: bool) {
     }
 }
 
-pub fn serve(port: u16) {
+pub fn serve(port: u16, sealing_key: &Sealing, opening_key: &Opening, nonce: &Vec<u8>) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }
-
     info!("Working in server mode.");
-
-    let public_ip = utils::get_public_ip().unwrap();
-    info!("Public IP: {}", public_ip);
 
     info!("Enabling kernel's IPv4 forwarding.");
     utils::enable_ipv4_forwarding().unwrap();
@@ -231,6 +272,7 @@ pub fn serve(port: u16) {
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
 
+	let additional_data = b"ychen".to_vec();
     LISTENING.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
 
@@ -243,12 +285,15 @@ pub fn serve(port: u16) {
         available_ids.append(&mut client_info.prune());
 
         poll.poll(&mut events, None).unwrap();
-
+	
         for event in events.iter() {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
-                    let msg: Message = deserialize(&buf[0..len]).unwrap();
+					info!("{} {:x} {:x}", len, buf[0], buf[1]);
+					let decrypted_buf = aead::open_in_place(&opening_key, &nonce, &additional_data, 0, &mut buf).unwrap();
+					info!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+                    let msg: Message = deserialize(&decrypted_buf[0..len]).unwrap();
                     match msg {
                         Message::Request => {
                             let client_id: Id = available_ids.pop().unwrap();
@@ -265,11 +310,17 @@ pub fn serve(port: u16) {
                                 token: client_token,
                             };
                             let encoded_reply = serialize(&reply, Infinite).unwrap();
-                            let data_len = encoded_reply.len();
+							let mut encrypted_reply = encoded_reply.clone();
+							let tag_len = aead::CHACHA20_POLY1305.tag_len();
+							for _ in 0..tag_len {
+								encrypted_reply.push(0);
+							}
+							aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut encrypted_reply, tag_len).unwrap();
+                            let data_len = encrypted_reply.len();
                             let mut sent_len = 0;
                             while sent_len < data_len {
                                 sent_len +=
-                                    sockfd.send_to(&encoded_reply[sent_len..data_len], &addr)
+                                    sockfd.send_to(&encrypted_reply[sent_len..data_len], &addr)
                                         .unwrap();
                             }
                         }
@@ -316,7 +367,13 @@ pub fn serve(port: u16) {
                                 data: encoder.compress_vec(data).unwrap(),
                             };
                             let encoded_msg = serialize(&msg, Infinite).unwrap();
-                            sockfd.send_to(&encoded_msg, &addr).unwrap();
+							let mut encrypted_msg = encoded_msg.clone();
+							let tag_len = aead::CHACHA20_POLY1305.tag_len();
+							for _ in 0..tag_len {
+								encrypted_msg.push(0);
+							}
+							aead::seal_in_place(&sealing_key, &nonce, &additional_data, &mut encrypted_msg, tag_len).unwrap();
+                            sockfd.send_to(&encrypted_msg, &addr).unwrap();
                         }
                     }
                 }
@@ -326,42 +383,33 @@ pub fn serve(port: u16) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::net::Ipv4Addr;
-    use network::*;
+#[test]
+fn resolve_test() {
+    assert_eq!(resolve("127.0.0.1").unwrap(),
+               IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+}
 
-    #[cfg(target_os = "linux")]
-    use std::thread;
+#[test]
+#[cfg(target_os = "linux")]
+fn integration_test() {
+    assert!(utils::is_root());
 
-    #[test]
-    fn resolve_test() {
-        assert_eq!(resolve("127.0.0.1").unwrap(),
-                   IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-    }
+    let server = thread::spawn(move || serve(8964));
 
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn integration_test() {
-        assert!(utils::is_root());
+    thread::sleep_ms(1000);
+    assert!(LISTENING.load(Ordering::Relaxed));
 
-        let server = thread::spawn(move || serve(8964));
+    let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
+    let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+    let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-        thread::sleep_ms(1000);
-        assert!(LISTENING.load(Ordering::Relaxed));
+    let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
+    assert_eq!(id, 253);
 
-        let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
-        let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let local_socket = UdpSocket::bind(&local_addr).unwrap();
+    let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
 
-        let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
-        assert_eq!(id, 253);
+    thread::sleep_ms(1000);
+    assert!(CONNECTED.load(Ordering::Relaxed));
 
-        let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
-
-        thread::sleep_ms(1000);
-        assert!(CONNECTED.load(Ordering::Relaxed));
-
-        INTERRUPTED.store(true, Ordering::Relaxed);
-    }
+    INTERRUPTED.store(true, Ordering::Relaxed);
 }
