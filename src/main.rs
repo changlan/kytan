@@ -79,9 +79,9 @@ fn main() {
     }
 
     let (sealing_key, opening_key) = network::key_derivation();
-    let mut nonce = vec![0; 12];
-    let rand = SystemRandom::new();
-    rand.fill(&mut nonce).unwrap();
+    let nonce = vec![0; 12];
+    //let rand = SystemRandom::new();
+    //rand.fill(&mut nonce).unwrap();
 
     match mode.as_ref() {
         "s" => network::serve(port, &sealing_key, &opening_key, &nonce),
