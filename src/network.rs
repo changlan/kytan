@@ -123,7 +123,7 @@ pub fn connect(host: &str, port: u16, default: bool, sealing_key: &Sealing, open
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
-    let (id, token) = initiate(&socket, &remote_addr).unwrap();
+    let (id, token) = initiate(&socket, &remote_addr, &sealing_key, &opening_key, &nonce).unwrap();
     info!("Session established with token {}. Assigned IP address: 10.10.10.{}.",
           token,
           id);
@@ -390,8 +390,9 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn integration_test() {
         assert!(utils::is_root());
-
-        let server = thread::spawn(move || serve(8964));
+        let (sealing_key, opening_key) = key_derivation();
+        let nonce = vec![0; 12];
+        let server = thread::spawn(move || serve(8964, &sealing_key, &opening_key, &nonce));
 
         thread::sleep_ms(1000);
         assert!(LISTENING.load(Ordering::Relaxed));
@@ -400,10 +401,10 @@ mod tests {
         let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-        let (id, token) = initiate(&local_socket, &remote_addr).unwrap();
+        let (id, token) = initiate(&local_socket, &remote_addr, &sealing_key, &opening_key, &nonce).unwrap();
         assert_eq!(id, 253);
 
-        let client = thread::spawn(move || connect("127.0.0.1", 8964, false));
+        let client = thread::spawn(move || connect("127.0.0.1", 8964, false, &sealing_key, &opening_key, &nonce));
 
         thread::sleep_ms(1000);
         assert!(CONNECTED.load(Ordering::Relaxed));
