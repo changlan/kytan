@@ -363,6 +363,7 @@ pub fn serve(port: u16, sealing_key: &Sealing, opening_key: &Opening, nonce: &Ve
                             while sent_len < data_len {
                                 sent_len += sockfd.send_to(&mut encrypted_msg[sent_len..data_len], &addr)
                                 	.unwrap();
+                            }
                         }
                     }
                 }
