@@ -45,18 +45,18 @@ interface name on your server (e.g. `eth0`):
 $ sudo iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o <INTERFACE> -j MASQUERADE
 ```
 
-To run `kytan` in server mode and listen on UDP port `9527`:
+To run `kytan` in server mode and listen on UDP port `9527` with password `hello`:
 
 ```
-$ sudo ./kytan -m s -p 9527
+$ sudo ./kytan -m s -p 9527 -s hello
 ```
 
 #### Client Mode
 
-To run `kytan` in client mode and connect to the server `<SERVER>:9527`:
+To run `kytan` in client mode and connect to the server `<SERVER>:9527` using password `hello`:
 
 ```
-$ sudo ./kytan -m c -p 9527 -h <SERVER>
+$ sudo ./kytan -m c -p 9527 -h <SERVER> -s hello
 ```
 
 ### License
