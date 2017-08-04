@@ -28,8 +28,10 @@ extern crate transient_hashmap;
 
 #[macro_use]
 extern crate log;
+extern crate ring;
 
 use std::sync::atomic::Ordering;
+use ring::rand::{SystemRandom, SecureRandom};
 
 mod device;
 mod utils;
@@ -76,11 +78,12 @@ fn main() {
         libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
     }
 
+    let secret = "password";
     match mode.as_ref() {
-        "s" => network::serve(port),
+        "s" => network::serve(port, &secret),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            network::connect(&host, port, true)
+            network::connect(&host, port, true, &secret)
         }
         _ => unreachable!(),
     };
