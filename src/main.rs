@@ -58,6 +58,7 @@ fn main() {
     opts.reqopt("m", "mode", "mode (server or client)", "[s|c]");
     opts.optopt("p", "port", "UDP port to listen/connect", "PORT");
     opts.optopt("h", "host", "remote host to connect (client mode)", "HOST");
+    opts.optopt("s", "secret", "shared secret", "PASSWORD");
 
     let args: Vec<String> = std::env::args().collect();
     let program = args[0].clone();
@@ -72,13 +73,13 @@ fn main() {
 
     let mode = matches.opt_str("m").unwrap();
     let port: u16 = matches.opt_str("p").unwrap_or(String::from("8964")).parse().unwrap();
+    let secret = matches.opt_str("s").unwrap();
 
     unsafe {
         libc::signal(libc::SIGINT, handle_signal as libc::sighandler_t);
         libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
     }
 
-    let secret = "password";
     match mode.as_ref() {
         "s" => network::serve(port, &secret),
         "c" => {
