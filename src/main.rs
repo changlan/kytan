@@ -78,16 +78,12 @@ fn main() {
         libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
     }
 
-    let (sealing_key, opening_key) = network::key_derivation();
-    let nonce = vec![0; 12];
-    //let rand = SystemRandom::new();
-    //rand.fill(&mut nonce).unwrap();
-
+    let secret = "password";
     match mode.as_ref() {
-        "s" => network::serve(port, &sealing_key, &opening_key, &nonce),
+        "s" => network::serve(port, &secret),
         "c" => {
             let host = matches.opt_str("h").unwrap();
-            network::connect(&host, port, true, &sealing_key, &opening_key, &nonce)
+            network::connect(&host, port, true, &secret)
         }
         _ => unreachable!(),
     };
