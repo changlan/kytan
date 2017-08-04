@@ -31,6 +31,7 @@ static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
 static LISTENING: AtomicBool = ATOMIC_BOOL_INIT;
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
+const NONCE: &[u8; 12] = &[0; 12];
 
 type Id = u8;
 type Token = u64;
@@ -82,7 +83,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let mut encrypted_req_msg = encoded_req_msg.clone();
     encrypted_req_msg.resize(encoded_req_msg.len() + TAG_LEN, 0);
     let mut remaining_len =
-        aead::seal_in_place(&sealing_key, &[0], &[], &mut encrypted_req_msg, TAG_LEN).unwrap();
+        aead::seal_in_place(&sealing_key, NONCE, &[], &mut encrypted_req_msg, TAG_LEN).unwrap();
 
     while remaining_len > 0 {
         let sent_bytes = try!(socket.send_to(&encrypted_req_msg, addr)
@@ -95,7 +96,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
     assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
-    let decrypted_buf = aead::open_in_place(&opening_key, &[0], &[], 0, &mut buf[0..len]).unwrap();
+    let decrypted_buf = aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
     let dlen = decrypted_buf.len();
     let resp_msg: Message = try!(deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string()));
     match resp_msg {
@@ -163,7 +164,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
                     let decrypted_buf =
-                        aead::open_in_place(&opening_key, &[0], &[], 0, &mut buf[0..len]).unwrap();
+                        aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
@@ -200,7 +201,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
                     let mut encrypted_msg = encoded_msg.clone();
                     encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
                     let data_len =
-                        aead::seal_in_place(&sealing_key, &[0], &[], &mut encrypted_msg, TAG_LEN)
+                        aead::seal_in_place(&sealing_key, NONCE, &[], &mut encrypted_msg, TAG_LEN)
                             .unwrap();
                     let mut sent_len = 0;
                     while sent_len < data_len {
@@ -272,7 +273,7 @@ pub fn serve(port: u16, secret: &str) {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
                     let decrypted_buf =
-                        aead::open_in_place(&opening_key, &[0], &[], 0, &mut buf[0..len]).unwrap();
+                        aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
@@ -294,7 +295,7 @@ pub fn serve(port: u16, secret: &str) {
                             let mut encrypted_reply = encoded_reply.clone();
                             encrypted_reply.resize(encoded_reply.len() + TAG_LEN, 0);
                             let data_len = aead::seal_in_place(&sealing_key,
-                                                               &[0],
+                                                               NONCE,
                                                                &[],
                                                                &mut encrypted_reply,
                                                                TAG_LEN)
@@ -352,7 +353,7 @@ pub fn serve(port: u16, secret: &str) {
                             let mut encrypted_msg = encoded_msg.clone();
                             encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
                             let data_len = aead::seal_in_place(&sealing_key,
-                                                               &[0],
+                                                               NONCE,
                                                                &[],
                                                                &mut encrypted_msg,
                                                                TAG_LEN)
