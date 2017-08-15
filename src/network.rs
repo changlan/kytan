@@ -131,13 +131,13 @@ impl NAT{
 	let sc_port = match iph.protocol { //get source_port
 	    1 => Err(String::from("The version is ICMP")),
 	    17 => {
-		let udphd = unsafe{
+		let udphd = unsafe {
 		    mem::transmute::<*const u8, &mut UdpHeader>(data.as_ptr().offset(len))
 	        };
 		Ok(udphd.source_port)
 	    } 
 	    6  => {
-		let tcphd = unsafe{
+		let tcphd = unsafe {
 		    mem::transmute::<*const u8, &mut TcpHeader>(data.as_ptr().offset(len))
 		};
 		Ok(tcphd.source_port)
@@ -147,7 +147,7 @@ impl NAT{
 		
         let key = (iph.protocol, iph.source_address, sc_port);
         let value = self.forward_table.get(&key).cloned();
-	let change_port = match value { //use source_port to get change_port
+        let change_port = match value { //use source_port to get change_port
 	    Some(p) => {
 		Ok(p.clone())
 	    }
@@ -167,7 +167,7 @@ impl NAT{
 	match iph.protocol {           //source_port -> change_port & checksum
     	    1 => Err(String::from("The version is ICMP")),
     	    17  => {
-		let udphd = unsafe{
+		let udphd = unsafe {
 		    mem::transmute::<*const u8, &mut UdpHeader>(data.as_ptr().offset(len))
 		};
 		let cksum = udptcp_cksum(&iph, &udphd);
@@ -175,7 +175,7 @@ impl NAT{
 		Ok(udphd.checksum = cksum)
 	    }
     	    6  => {
-		let tcphd = unsafe{
+		let tcphd = unsafe {
 		    mem::transmute::<*const u8, &mut TcpHeader>(data.as_ptr().offset(len))
 		};
 		let cksum = udptcp_cksum(&iph, &tcphd);
@@ -189,20 +189,20 @@ impl NAT{
     pub fn handle_backward_packet(&mut self, data:&[u8], iph:&mut Ipv4Header, ex_address:u32){
 	let len = ((iph.version_ihl & 0xf) * 5) as isize;
 	let change_port = match iph.protocol { //get change_port
-	    1 => Err(String::from("The version is ICMP")),
+	    1  => Err(String::from("The version is ICMP")),
 	    17 => {
-		let udphd = unsafe{
+		let udphd = unsafe {
 		    mem::transmute::<*const u8, &mut UdpHeader>(data.as_ptr().offset(len))
 		};
 		Ok(udphd.destination_port) //change_port ?= destination_port
 	    } 
 	    6  => {
-		let tcphd = unsafe{
+		let tcphd = unsafe {
 		    mem::transmute::<*const u8, &mut TcpHeader>(data.as_ptr().offset(len))
 		};
 		Ok(tcphd.destination_port)
 	    }
-    	    _ => Err(String::from("Invalid address!")),
+    	    _  => Err(String::from("Invalid address!")),
 	}.unwrap();
 	let key = (iph.protocol, change_port);
 	let value = self.backward_table.get(&key);
@@ -217,9 +217,9 @@ impl NAT{
 	let (sc_address, sc_port) = buf;      
 	iph.destination_address = sc_address;   	//destination_address -> sc_address
 	match iph.protocol {                        //destination_port -> sc_port & checksum
-    	    1 => Err(String::from("The version is ICMP")),
+    	    1   => Err(String::from("The version is ICMP")),
     	    17  => {
-		let udphd = unsafe{
+		let udphd = unsafe {
 		    mem::transmute::<*const u8, &mut UdpHeader>(data.as_ptr().offset(len))
 		};
 		let cksum = udptcp_cksum(&iph, &udphd);
@@ -227,14 +227,14 @@ impl NAT{
 		Ok(udphd.destination_port = sc_port)
 	    }
     	    6  =>{
-		let tcphd = unsafe{
+		let tcphd = unsafe {
 		    mem::transmute::<*const u8, &mut TcpHeader>(data.as_ptr().offset(len))
 		};
 		let cksum = udptcp_cksum(&iph, &tcphd);
 		tcphd.checksum = cksum;
 	        Ok(tcphd.destination_port = sc_port)
 	    }
-    	    _ => Err(String::from("Invalid address!")),
+    	    _  => Err(String::from("Invalid address!")),
 	}.unwrap()
     }	
 }
@@ -471,10 +471,10 @@ pub fn serve(port: u16, secret: &str) {
                                                 tun.write(&decompressed_data[sent_len..data_len])
                                                     .unwrap()
                                         let data: &[u8] = decompressed_data.as_ref();
-					let iph = unsafe {
-					    mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr())
-					};
-					NAT::handle_forward_packet(&mut nat, data, iph, ex_address);
+                                        let iph = unsafe {
+                                            mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr())
+                                        };
+                                        NAT::handle_forward_packet(&mut nat, data, iph, ex_address);
                                         }
                                     }
                                 }
@@ -490,7 +490,7 @@ pub fn serve(port: u16, secret: &str) {
                     match client_info.get(&client_id) {
                         None => warn!("Unknown IP packet from TUN for client {}.", client_id),
                         Some(&(token, addr)) => {
-                            let mut iph = unsafe{
+                            let mut iph = unsafe {
 				mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr())
 			    };					
 			    NAT::handle_backward_packet(&mut nat, data, iph, ex_address);
