@@ -339,7 +339,7 @@ pub fn serve(port: u16, secret: &str) {
                                         while sent_len < data_len {
                                             sent_len +=
                                                 tun.write(&decompressed_data[sent_len..data_len])
-                                                    .unwrap()
+                                                    .unwrap();
                                         let data: &[u8] = decompressed_data.as_ref();
                                         let iph = unsafe {
                                             mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr())
