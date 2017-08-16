@@ -31,7 +31,6 @@ extern crate log;
 extern crate ring;
 
 use std::sync::atomic::Ordering;
-use ring::rand::{SystemRandom, SecureRandom};
 
 mod device;
 mod utils;
