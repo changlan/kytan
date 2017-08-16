@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::mem;
-use packet::{Ipv4Header, UdpHeader, TcpHeader, udptcp_cksum};
+use packet::{Ipv4Header, UdpHeader, TcpHeader, udptcp_cksum, ipv4_cksum};
 
 pub struct NAT {
     pub forward_table: HashMap<(u8, u32, u16), u16>,
@@ -69,6 +69,7 @@ impl NAT {
             }
             x @ _ => panic!("Unsupported protocol: {}", x),
         };
+        iph.header_checksum = ipv4_cksum(iph);
     }
 
     pub fn handle_backward_packet(&mut self, data: &[u8], iph: &mut Ipv4Header) {
@@ -109,5 +110,6 @@ impl NAT {
             }
             x @ _ => panic!("Unsupported protocol: {}", x),
         };
+        iph.header_checksum = ipv4_cksum(iph);
     }
 }
