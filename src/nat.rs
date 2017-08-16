@@ -2,7 +2,6 @@ use utils;
 use std::collections::HashMap;
 use std::mem;
 use packet::{Ipv4Header,UdpHeader,TcpHeader, udptcp_cksum};
-use std::net::Ipv4Addr;
 
 pub struct NAT {
     pub forward_table: HashMap<(u8, u32, u16), u16>, 
@@ -53,7 +52,6 @@ impl NAT{
 	  	} else {
 	       	    Err(String::from("No port to distribute"))
 	   	};		
-		Err(String::from("no response"))
             }
 	}.unwrap();
 	iph.source_address = ex_address; //source_ip -> external_ip
