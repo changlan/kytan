@@ -17,7 +17,8 @@ impl NAT {
         }
     }
 
-    pub fn handle_forward_packet(&mut self, data: &[u8], iph: &mut Ipv4Header, ex_address: u32) {
+    pub fn handle_forward_packet(&mut self, data: &[u8], ex_address: u32) {
+        let iph = unsafe { mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr()) };
         let ihl = ((iph.version_ihl & 0xf) * 5) as isize;
 
         let sc_port = match iph.protocol {
@@ -72,7 +73,8 @@ impl NAT {
         iph.header_checksum = ipv4_cksum(iph);
     }
 
-    pub fn handle_backward_packet(&mut self, data: &[u8], iph: &mut Ipv4Header) {
+    pub fn handle_backward_packet(&mut self, data: &[u8]) {
+        let iph = unsafe { mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr()) };
         let ihl = ((iph.version_ihl & 0xf) * 5) as isize;
         let virtual_port = match iph.protocol {
                 1 => Err(String::from("The version is ICMP")),

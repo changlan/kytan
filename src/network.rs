@@ -27,7 +27,6 @@ use transient_hashmap::TransientHashMap;
 use ring::{aead, pbkdf2, digest};
 use nat::NAT;
 use std::mem;
-use packet::Ipv4Header;
 use std::net::Ipv4Addr;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
@@ -332,22 +331,13 @@ pub fn serve(port: u16, secret: &str) {
                                     } else {
                                         let decompressed_data = decoder.decompress_vec(&data)
                                             .unwrap();
+                                        nat.handle_forward_packet(&decompressed_data, ex_address);
                                         let data_len = decompressed_data.len();
                                         let mut sent_len = 0;
                                         while sent_len < data_len {
                                             sent_len +=
                                                 tun.write(&decompressed_data[sent_len..data_len])
                                                     .unwrap();
-                                            let data: &[u8] = decompressed_data.as_ref();
-                                            let iph =
-                                                unsafe {
-                                                    mem::transmute::<*const u8,
-                                                                     &mut Ipv4Header>(data.as_ptr())
-                                                };
-                                            NAT::handle_forward_packet(&mut nat,
-                                                                       data,
-                                                                       iph,
-                                                                       ex_address);
                                         }
                                     }
                                 }
@@ -363,11 +353,7 @@ pub fn serve(port: u16, secret: &str) {
                     match client_info.get(&client_id) {
                         None => warn!("Unknown IP packet from TUN for client {}.", client_id),
                         Some(&(token, addr)) => {
-                            let mut iph = unsafe {
-                                mem::transmute::<*const u8, &mut Ipv4Header>(data.as_ptr())
-                            };
-                            NAT::handle_backward_packet(&mut nat, data, iph);
-
+                            nat.handle_backward_packet(data);
                             let msg = Message::Data {
                                 id: client_id,
                                 token: token,
