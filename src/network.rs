@@ -47,9 +47,8 @@ const TUN: mio::Token = mio::Token(0);
 const SOCK: mio::Token = mio::Token(1);
 
 fn resolve(host: &str) -> Result<IpAddr, String> {
-    let mut ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
-    let ip = ip_list.next().unwrap().unwrap();
-    Ok(ip)
+    let ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
+    Ok(ip_list.first().unwrap().clone())
 }
 
 fn create_tun_attempt() -> device::Tun {
