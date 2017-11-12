@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::process::Command;
+use std::net::Ipv4Addr;
 use libc;
 
 pub fn is_root() -> bool {
@@ -59,7 +60,9 @@ impl DefaultGateway {
     pub fn create(gateway: &str, remote: &str) -> DefaultGateway {
         let origin = get_default_gateway().unwrap();
         info!("Original default gateway: {}.", origin);
-        add_route(RouteType::Host, remote, &origin).unwrap();
+        if let Ok(_) = remote.parse::<Ipv4Addr>() {
+            add_route(RouteType::Host, remote, &origin).unwrap();
+        }
         delete_default_gateway().unwrap();
         set_default_gateway(gateway).unwrap();
         DefaultGateway {
@@ -73,7 +76,9 @@ impl Drop for DefaultGateway {
     fn drop(&mut self) {
         delete_default_gateway().unwrap();
         set_default_gateway(&self.origin).unwrap();
-        delete_route(RouteType::Host, &self.remote).unwrap();
+        if let Ok(_) = self.remote.parse::<Ipv4Addr>() {
+            delete_route(RouteType::Host, &self.remote).unwrap();
+        }
     }
 }
 

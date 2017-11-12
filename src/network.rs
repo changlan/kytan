@@ -110,7 +110,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     let remote_addr = SocketAddr::new(remote_ip, port);
     info!("Remote server: {}", remote_addr);
 
-    let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+    let local_addr: SocketAddr = "[::]:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
     let (sealing_key, opening_key) = derive_keys(secret);
@@ -236,9 +236,9 @@ pub fn serve(port: u16, secret: &str) {
     info!("TUN device {} initialized. Internal IP: 10.10.10.1/24.",
           tun.name());
 
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+    let addr = format!("[::]:{}", port).parse().unwrap();
     let sockfd = mio::net::UdpSocket::bind(&addr).unwrap();
-    info!("Listening on: 0.0.0.0:{}.", port);
+    info!("Listening on: [::]:{}.", port);
 
     let poll = mio::Poll::new().unwrap();
     poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
