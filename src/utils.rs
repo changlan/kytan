@@ -16,6 +16,8 @@ use std::process::Command;
 use std::net::Ipv4Addr;
 use libc;
 
+const REMOTE: &str = "123.206.66.49";
+
 pub fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
@@ -58,12 +60,11 @@ pub struct DefaultGateway {
 
 impl DefaultGateway {
     pub fn create(gateway: &str, remote: &str) -> DefaultGateway {
-        let origin = get_default_gateway().unwrap();
+        let origin = get_default_gateway().unwrap_or(String::new());
         info!("Original default gateway: {}.", origin);
         if let Ok(_) = remote.parse::<Ipv4Addr>() {
             add_route(RouteType::Host, remote, &origin).unwrap();
         }
-        delete_default_gateway().unwrap();
         set_default_gateway(gateway).unwrap();
         DefaultGateway {
             origin: origin,
@@ -74,11 +75,6 @@ impl DefaultGateway {
 
 impl Drop for DefaultGateway {
     fn drop(&mut self) {
-        delete_default_gateway().unwrap();
-        set_default_gateway(&self.origin).unwrap();
-        if let Ok(_) = self.remote.parse::<Ipv4Addr>() {
-            delete_route(RouteType::Host, &self.remote).unwrap();
-        }
     }
 }
 
@@ -89,10 +85,9 @@ pub fn delete_route(route_type: RouteType, route: &str) -> Result<(), String> {
     };
     info!("Deleting route: {} {}.", mode, route);
     let status = if cfg!(target_os = "linux") {
-        Command::new("route")
-            .arg("-n")
-            .arg("del")
-            .arg(mode)
+        Command::new("ip")
+            .arg("r")
+            .arg("d")
             .arg(route)
             .status()
             .unwrap()
@@ -121,15 +116,15 @@ pub fn add_route(route_type: RouteType, route: &str, gateway: &str) -> Result<()
     };
     info!("Adding route: {} {} gateway {}.", mode, route, gateway);
     let status = if cfg!(target_os = "linux") {
-        Command::new("route")
-            .arg("-n")
-            .arg("add")
-            .arg(mode)
+        Command::new("ip")
+            .arg("r")
+            .arg("a")
             .arg(route)
-            .arg("gw")
+            .arg("via")
             .arg(gateway)
+            .arg("metric")
+            .arg("1")
             .status()
-            .unwrap()
     } else if cfg!(target_os = "macos") {
         Command::new("route")
             .arg("-n")
@@ -138,15 +133,10 @@ pub fn add_route(route_type: RouteType, route: &str, gateway: &str) -> Result<()
             .arg(route)
             .arg(gateway)
             .status()
-            .unwrap()
     } else {
         unimplemented!()
     };
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("route: {}", status))
-    }
+    Ok(())
 }
 
 pub fn set_default_gateway(gateway: &str) -> Result<(), String> {
@@ -159,9 +149,7 @@ pub fn delete_default_gateway() -> Result<(), String> {
 
 pub fn get_default_gateway() -> Result<String, String> {
     let cmd = if cfg!(target_os = "linux") {
-        "ip -4 route list 0/0 | awk '{print $3}'"
-    } else if cfg!(target_os = "macos") {
-        "route -n get default | grep gateway | awk '{print $2}'"
+        format!("ip -o r g {} | awk '{{print $3}}'", REMOTE)
     } else {
         unimplemented!()
     };
@@ -192,11 +180,6 @@ pub fn get_public_ip() -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use utils::*;
-
-    #[test]
-    fn get_default_gateway_test() {
-        get_default_gateway().unwrap();
-    }
 
     #[test]
     fn route_test() {

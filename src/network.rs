@@ -93,7 +93,6 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
 
     let mut buf = [0u8; 1600];
     let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
-    assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
     let decrypted_buf = aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
     let dlen = decrypted_buf.len();

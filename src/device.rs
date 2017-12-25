@@ -220,7 +220,9 @@ impl Tun {
         assert!(status.success());
 
         status = if cfg!(target_os = "linux") {
-            process::Command::new("ifconfig")
+            process::Command::new("ip")
+                .arg("link")
+                .arg("set")
                 .arg(self.if_name.clone())
                 .arg("mtu")
                 .arg(MTU)
