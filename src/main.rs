@@ -31,7 +31,6 @@ extern crate log;
 extern crate ring;
 
 use std::sync::atomic::Ordering;
-use ring::rand::{SystemRandom, SecureRandom};
 
 mod device;
 mod utils;
@@ -48,7 +47,7 @@ extern "C" fn handle_signal(_: libc::c_int) {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     if !utils::is_root() {
         panic!("Please run as root");
