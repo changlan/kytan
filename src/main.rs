@@ -36,6 +36,7 @@ mod device;
 mod utils;
 mod network;
 mod packet;
+mod nat;
 
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);

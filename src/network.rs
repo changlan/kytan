@@ -25,6 +25,9 @@ use snap;
 use rand::{thread_rng, Rng};
 use transient_hashmap::TransientHashMap;
 use ring::{aead, pbkdf2, digest};
+use nat::NAT;
+use std::mem;
+use std::net::Ipv4Addr;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
@@ -259,6 +262,11 @@ pub fn serve(port: u16, secret: &str) {
     LISTENING.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
 
+    let mut nat = NAT::new();
+    let public_ip: Ipv4Addr = public_ip.parse().unwrap();
+    let exadd = public_ip.octets();
+    let ex_address = unsafe { mem::transmute::<[u8; 4], u32>(exadd) };
+
     loop {
         if INTERRUPTED.load(Ordering::Relaxed) {
             break;
@@ -322,6 +330,7 @@ pub fn serve(port: u16, secret: &str) {
                                     } else {
                                         let decompressed_data = decoder.decompress_vec(&data)
                                             .unwrap();
+                                        nat.handle_forward_packet(&decompressed_data, ex_address);
                                         let data_len = decompressed_data.len();
                                         let mut sent_len = 0;
                                         while sent_len < data_len {
@@ -343,6 +352,7 @@ pub fn serve(port: u16, secret: &str) {
                     match client_info.get(&client_id) {
                         None => warn!("Unknown IP packet from TUN for client {}.", client_id),
                         Some(&(token, addr)) => {
+                            nat.handle_backward_packet(data);
                             let msg = Message::Data {
                                 id: client_id,
                                 token: token,
