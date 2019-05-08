@@ -18,13 +18,14 @@ use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::io::{Write, Read};
 use mio;
 use dns_lookup;
-use bincode::{serialize, deserialize, Infinite};
+use bincode::{serialize, deserialize};
 use device;
 use utils;
 use snap;
 use rand::{thread_rng, Rng};
 use transient_hashmap::TransientHashMap;
 use ring::{aead, pbkdf2, digest};
+use std::num::NonZeroU32;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
@@ -35,6 +36,13 @@ const NONCE: &[u8; 12] = &[0; 12];
 
 type Id = u8;
 type Token = u64;
+
+fn generate_add_nonce(secret: &str) -> (ring::aead::Aad,ring::aead::Nonce){
+    let nonce = aead::Nonce::assume_unique_for_key([0;12]);
+    let aad = aead::Aad::empty();
+    (aad,nonce)
+}
+
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 enum Message {
@@ -69,7 +77,8 @@ fn create_tun_attempt() -> device::Tun {
 fn derive_keys(password: &str) -> (aead::SealingKey, aead::OpeningKey) {
     let mut key = [0; KEY_LEN];
     let salt = vec![0; 64];
-    pbkdf2::derive(&digest::SHA256, 1024, &salt, password.as_bytes(), &mut key);
+    let pbkdf2_iterations: NonZeroU32 = NonZeroU32::new(1024).unwrap();
+    pbkdf2::derive(&digest::SHA256, pbkdf2_iterations, &salt, password.as_bytes(), &mut key);    
     let sealing_key = aead::SealingKey::new(&aead::AES_256_GCM, &key).unwrap();
     let opening_key = aead::OpeningKey::new(&aead::AES_256_GCM, &key).unwrap();
     (sealing_key, opening_key)
@@ -78,11 +87,12 @@ fn derive_keys(password: &str) -> (aead::SealingKey, aead::OpeningKey) {
 fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, Token), String> {
     let (sealing_key, opening_key) = derive_keys(secret);
     let req_msg = Message::Request;
-    let encoded_req_msg: Vec<u8> = try!(serialize(&req_msg, Infinite).map_err(|e| e.to_string()));
+    let encoded_req_msg: Vec<u8> = try!(serialize(&req_msg).map_err(|e| e.to_string()));
     let mut encrypted_req_msg = encoded_req_msg.clone();
     encrypted_req_msg.resize(encoded_req_msg.len() + TAG_LEN, 0);
+    let (aad,nonce) = generate_add_nonce(secret);
     let mut remaining_len =
-        aead::seal_in_place(&sealing_key, NONCE, &[], &mut encrypted_req_msg, TAG_LEN).unwrap();
+        aead::seal_in_place(&sealing_key, nonce, aad, &mut encrypted_req_msg, TAG_LEN).unwrap();
 
     while remaining_len > 0 {
         let sent_bytes = try!(socket.send_to(&encrypted_req_msg, addr)
@@ -95,7 +105,8 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
     assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
-    let decrypted_buf = aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
+    let (aad,nonce) = generate_add_nonce(secret);
+    let decrypted_buf = aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
     let dlen = decrypted_buf.len();
     let resp_msg: Message = try!(deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string()));
     match resp_msg {
@@ -162,8 +173,9 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
+                    let (aad,nonce) = generate_add_nonce(secret);
                     let decrypted_buf =
-                        aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
+                        aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
@@ -196,11 +208,12 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
                         token: token,
                         data: encoder.compress_vec(data).unwrap(),
                     };
-                    let encoded_msg = serialize(&msg, Infinite).unwrap();
+                    let encoded_msg = serialize(&msg).unwrap();
                     let mut encrypted_msg = encoded_msg.clone();
                     encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
+                    let (aad,nonce) = generate_add_nonce(secret);
                     let data_len =
-                        aead::seal_in_place(&sealing_key, NONCE, &[], &mut encrypted_msg, TAG_LEN)
+                        aead::seal_in_place(&sealing_key, nonce, aad, &mut encrypted_msg, TAG_LEN)
                             .unwrap();
                     let mut sent_len = 0;
                     while sent_len < data_len {
@@ -271,8 +284,9 @@ pub fn serve(port: u16, secret: &str) {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
+                    let (aad,nonce) = generate_add_nonce(secret);
                     let decrypted_buf =
-                        aead::open_in_place(&opening_key, NONCE, &[], 0, &mut buf[0..len]).unwrap();
+                        aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
@@ -290,12 +304,13 @@ pub fn serve(port: u16, secret: &str) {
                                 id: client_id,
                                 token: client_token,
                             };
-                            let encoded_reply = serialize(&reply, Infinite).unwrap();
+                            let encoded_reply = serialize(&reply).unwrap();
                             let mut encrypted_reply = encoded_reply.clone();
                             encrypted_reply.resize(encoded_reply.len() + TAG_LEN, 0);
+                            let (aad,nonce) = generate_add_nonce(secret);
                             let data_len = aead::seal_in_place(&sealing_key,
-                                                               NONCE,
-                                                               &[],
+                                                               nonce,
+                                                               aad,
                                                                &mut encrypted_reply,
                                                                TAG_LEN)
                                 .unwrap();
@@ -348,12 +363,13 @@ pub fn serve(port: u16, secret: &str) {
                                 token: token,
                                 data: encoder.compress_vec(data).unwrap(),
                             };
-                            let encoded_msg = serialize(&msg, Infinite).unwrap();
+                            let encoded_msg = serialize(&msg).unwrap();
                             let mut encrypted_msg = encoded_msg.clone();
                             encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
+                            let (aad,nonce) = generate_add_nonce(secret);
                             let data_len = aead::seal_in_place(&sealing_key,
-                                                               NONCE,
-                                                               &[],
+                                                               nonce,
+                                                               aad,
                                                                &mut encrypted_msg,
                                                                TAG_LEN)
                                 .unwrap();
