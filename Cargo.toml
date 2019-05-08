@@ -12,7 +12,7 @@ serde_derive = "*"
 bincode = "*"
 log = "*"
 env_logger = "*"
-dns-lookup = { git = "https://github.com/windoze/dns-lookup.git" }
+dns-lookup = "*"
 snap = "*"
 rand = "*"
 transient-hashmap = "*"
