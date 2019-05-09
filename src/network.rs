@@ -103,7 +103,6 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
 
     let mut buf = [0u8; 1600];
     let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
-    assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
     let (aad,nonce) = generate_add_nonce(secret);
     let decrypted_buf = aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
@@ -121,7 +120,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     let remote_addr = SocketAddr::new(remote_ip, port);
     info!("Remote server: {}", remote_addr);
 
-    let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+    let local_addr: SocketAddr = "[::]:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
     let (sealing_key, opening_key) = derive_keys(secret);
@@ -249,9 +248,9 @@ pub fn serve(port: u16, secret: &str) {
     info!("TUN device {} initialized. Internal IP: 10.10.10.1/24.",
           tun.name());
 
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+    let addr = format!("[::]:{}", port).parse().unwrap();
     let sockfd = mio::net::UdpSocket::bind(&addr).unwrap();
-    info!("Listening on: 0.0.0.0:{}.", port);
+    info!("Listening on: [::]:{}.", port);
 
     let poll = mio::Poll::new().unwrap();
     poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
