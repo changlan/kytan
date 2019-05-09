@@ -23,7 +23,6 @@ use getopts;
 use env_logger;
 use libc;
 
-
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
     print!("{}", opts.usage(&brief));

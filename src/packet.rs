@@ -117,7 +117,7 @@ pub fn udptcp_cksum<T>(ip: &Ipv4Header, l4: &T) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use packet::*;
+    use crate::packet::*;
 
     #[test]
     fn raw_cksum_test() {

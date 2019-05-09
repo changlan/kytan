@@ -19,13 +19,15 @@ use std::io::{Write, Read};
 use mio;
 use dns_lookup;
 use bincode::{serialize, deserialize};
-use device;
-use utils;
+use crate::device;
+use crate::utils;
 use snap;
 use rand::{thread_rng, Rng};
 use transient_hashmap::TransientHashMap;
 use ring::{aead, pbkdf2, digest};
 use std::num::NonZeroU32;
+use log::{info,warn};
+use serde_derive::{Serialize,Deserialize};
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
@@ -55,7 +57,7 @@ const TUN: mio::Token = mio::Token(0);
 const SOCK: mio::Token = mio::Token(1);
 
 fn resolve(host: &str) -> Result<IpAddr, String> {
-    let ip_list = try!(dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host"));
+    let ip_list = dns_lookup::lookup_host(host).map_err(|_| "dns_lookup::lookup_host")?;
     Ok(ip_list.first().unwrap().clone())
 }
 
@@ -87,7 +89,7 @@ fn derive_keys(password: &str) -> (aead::SealingKey, aead::OpeningKey) {
 fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, Token), String> {
     let (sealing_key, opening_key) = derive_keys(secret);
     let req_msg = Message::Request;
-    let encoded_req_msg: Vec<u8> = try!(serialize(&req_msg).map_err(|e| e.to_string()));
+    let encoded_req_msg: Vec<u8> = serialize(&req_msg).map_err(|e| e.to_string())?;
     let mut encrypted_req_msg = encoded_req_msg.clone();
     encrypted_req_msg.resize(encoded_req_msg.len() + TAG_LEN, 0);
     let (aad,nonce) = generate_add_nonce(secret);
@@ -95,20 +97,20 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
         aead::seal_in_place(&sealing_key, nonce, aad, &mut encrypted_req_msg, TAG_LEN).unwrap();
 
     while remaining_len > 0 {
-        let sent_bytes = try!(socket.send_to(&encrypted_req_msg, addr)
-            .map_err(|e| e.to_string()));
+        let sent_bytes = socket.send_to(&encrypted_req_msg, addr)
+            .map_err(|e| e.to_string())?;
         remaining_len -= sent_bytes;
     }
     info!("Request sent to {}.", addr);
 
     let mut buf = [0u8; 1600];
-    let (len, recv_addr) = try!(socket.recv_from(&mut buf).map_err(|e| e.to_string()));
+    let (len, recv_addr) = socket.recv_from(&mut buf).map_err(|e| e.to_string())?;
     assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
     let (aad,nonce) = generate_add_nonce(secret);
     let decrypted_buf = aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
     let dlen = decrypted_buf.len();
-    let resp_msg: Message = try!(deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string()));
+    let resp_msg: Message = deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string())?;
     match resp_msg {
         Message::Response { id, token } => Ok((id, token)),
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
@@ -391,7 +393,7 @@ pub fn serve(port: u16, secret: &str) {
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
-    use network::*;
+    use crate::network::*;
 
     #[cfg(target_os = "linux")]
     use std::thread;
