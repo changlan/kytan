@@ -91,7 +91,7 @@ impl Tun {
     #[cfg(target_os = "linux")]
     pub fn create(name: u8) -> Result<Tun, io::Error> {
         let path = path::Path::new("/dev/net/tun");
-        let file = try!(fs::OpenOptions::new().read(true).write(true).open(&path));
+        let file = fs::OpenOptions::new().read(true).write(true).open(&path)?;
 
         let mut req = ioctl_flags_data {
             ifr_name: {

@@ -12,30 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate getopts;
-extern crate mio;
-extern crate libc;
-
-#[macro_use]
-extern crate serde_derive;
-extern crate bincode;
-
-extern crate env_logger;
-extern crate dns_lookup;
-extern crate snap;
-extern crate rand;
-extern crate transient_hashmap;
-
-#[macro_use]
-extern crate log;
-extern crate ring;
-
-use std::sync::atomic::Ordering;
-
 mod device;
 mod utils;
 mod network;
 mod packet;
+
+
+use std::sync::atomic::Ordering;
+use getopts;
+use env_logger;
+use libc;
+
 
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
