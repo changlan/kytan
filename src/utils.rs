@@ -14,6 +14,7 @@
 
 use std::process::Command;
 use libc;
+use log::{info,warn};
 
 pub fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
@@ -186,7 +187,7 @@ pub fn get_public_ip() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use utils::*;
+    use crate::utils::*;
 
     #[test]
     fn get_default_gateway_test() {

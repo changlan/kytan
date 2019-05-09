@@ -2,6 +2,7 @@
 name = "kytan"
 version = "0.0.1"
 authors = ["Chang Lan <clan@eecs.berkeley.edu>"]
+edition = "2018"
 
 [dependencies]
 libc = "*"
