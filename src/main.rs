@@ -16,6 +16,7 @@ mod device;
 mod utils;
 mod network;
 mod packet;
+mod config;
 
 
 use std::sync::atomic::Ordering;
