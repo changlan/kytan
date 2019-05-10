@@ -234,7 +234,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     }
 }
 
-pub fn serve(port: u16, secret: &str,dns: &str) {
+pub fn serve(port: u16, secret: &str,dns: IpAddr) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }
@@ -414,7 +414,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn integration_test() {
         assert!(utils::is_root());
-        let server = thread::spawn(move || serve(8964, "password","8.8.8.8"));
+        let server = thread::spawn(move || serve(8964, "password","8.8.8.8".parse::<IpAddr>().unwrap()));
 
         thread::sleep_ms(1000);
         assert!(LISTENING.load(Ordering::Relaxed));
