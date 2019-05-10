@@ -222,6 +222,7 @@ mod tests {
         enable_ipv4_forwarding().unwrap();
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn get_default_gateway_test() {
         let a = get_default_gateway().unwrap();
         assert!(get_route_gateway("0/0").unwrap().contains(&*a))
