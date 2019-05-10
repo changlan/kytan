@@ -29,6 +29,8 @@ use std::num::NonZeroU32;
 use log::{info,warn};
 use serde_derive::{Serialize,Deserialize};
 
+use crate::cli::get_args;
+
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
 static LISTENING: AtomicBool = ATOMIC_BOOL_INIT;
