@@ -56,7 +56,7 @@ fn main() {
     //         return;
     //     }
     // };
-    let args = cli::get_args().unwrap();
+    // let args = cli::get_args().unwrap();
 
     // let mode = matches.opt_str("m").unwrap();
     // let port: u16 = matches.opt_str("p").unwrap_or(String::from("8964")).parse().unwrap();
@@ -67,13 +67,18 @@ fn main() {
         libc::signal(libc::SIGTERM, handle_signal as libc::sighandler_t);
     }
 
-    match args.mode.as_ref() {
-        "server" => network::serve(args.port, &args.key,&args.dns),
-        "client" => {
-            network::connect(&args.host, args.port, true, &args.key)
-        }
-        _ => unreachable!(),
-    };
+    match cli::get_args().unwrap() {
+        cli::Args::Client(client) => network::connect(&client.remote_addr, client.port, true, &client.key),
+        cli::Args::Server(server) => network::serve(server.port, &server.key, server.dns),
+    }
+
+    // match args.mode.as_ref() {
+    //     "server" => network::serve(args.port, &args.key,&args.dns),
+    //     "client" => {
+    //         network::connect(&args.host, args.port, true, &args.key)
+    //     }
+    //     _ => unreachable!(),
+    // };
 
     println!("SIGINT/SIGTERM captured. Exit.");
 }
