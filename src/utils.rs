@@ -41,10 +41,8 @@ pub fn enable_ipv4_forwarding() -> Result<(), String> {
     }
 }
 
-#[test]
-fn enable_ipv4_forwarding_test() {
-    enable_ipv4_forwarding().unwrap();
-}
+
+
 
 pub enum RouteType {
     Net,
@@ -185,21 +183,64 @@ pub fn get_public_ip() -> Result<String, String> {
     }
 }
 
+fn get_route_gateway(route: &str) -> Result<String,String> {
+    let cmd = format!("ip -4 route list {}",route);
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout).unwrap().trim_right().to_string())
+    } else {
+        Err(String::from_utf8(output.stderr).unwrap())
+    }
+
+}
+
+
+pub fn set_dns(dns: &str) -> Result<String,String> {
+    let cmd = format!("echo nameserver {} > /etc/resolv.conf",dns);
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout).unwrap())
+    } else {
+        Err(String::from_utf8(output.stderr).unwrap())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::utils::*;
 
     #[test]
+    fn enable_ipv4_forwarding_test() {
+        enable_ipv4_forwarding().unwrap();
+    }
+    #[test]
     fn get_default_gateway_test() {
-        get_default_gateway().unwrap();
+        let a = get_default_gateway().unwrap();
+        assert!(get_route_gateway("0/0").unwrap().contains(&*a))
     }
 
     #[test]
     fn route_test() {
         assert!(is_root());
-
         let gw = get_default_gateway().unwrap();
         add_route(RouteType::Host, "1.1.1.1", &gw).unwrap();
+        assert!(get_route_gateway("1.1.1.1").unwrap().contains(&*gw));
         delete_route(RouteType::Host, "1.1.1.1").unwrap();
+        assert!(!get_route_gateway("1.1.1.1").unwrap().contains(&*gw));
     }
+    
+    #[test]
+    fn set_dns_test() {
+        assert!(is_root());
+        set_dns("8.8.8.8").unwrap();
+    }
+
 }
