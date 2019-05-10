@@ -29,7 +29,6 @@ use std::num::NonZeroU32;
 use log::{info,warn};
 use serde_derive::{Serialize,Deserialize};
 
-use crate::cli::get_args;
 
 pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
 static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
@@ -51,7 +50,7 @@ fn generate_add_nonce(secret: &str) -> (ring::aead::Aad,ring::aead::Nonce){
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 enum Message {
     Request,
-    Response { id: Id, token: Token },
+    Response { id: Id, token: Token, dns: String },
     Data { id: Id, token: Token, data: Vec<u8> },
 }
 
@@ -88,7 +87,7 @@ fn derive_keys(password: &str) -> (aead::SealingKey, aead::OpeningKey) {
     (sealing_key, opening_key)
 }
 
-fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, Token), String> {
+fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, Token,String), String> {
     let (sealing_key, opening_key) = derive_keys(secret);
     let req_msg = Message::Request;
     let encoded_req_msg: Vec<u8> = serialize(&req_msg).map_err(|e| e.to_string())?;
@@ -114,7 +113,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let dlen = decrypted_buf.len();
     let resp_msg: Message = deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string())?;
     match resp_msg {
-        Message::Response { id, token } => Ok((id, token)),
+        Message::Response { id, token,dns } => Ok((id, token,dns)),
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
     }
 }
@@ -130,10 +129,11 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
 
     let (sealing_key, opening_key) = derive_keys(secret);
 
-    let (id, token) = initiate(&socket, &remote_addr, &secret).unwrap();
-    info!("Session established with token {}. Assigned IP address: 10.10.10.{}.",
+    let (id, token,dns) = initiate(&socket, &remote_addr, &secret).unwrap();
+    info!("Session established with token {}. Assigned IP address: 10.10.10.{}. dns: {}",
           token,
-          id);
+          id,
+          dns);
 
     info!("Bringing up TUN device.");
     let mut tun = create_tun_attempt();
@@ -143,6 +143,9 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     info!("TUN device {} initialized. Internal IP: 10.10.10.{}/24.",
           tun.name(),
           id);
+
+    info!("setting dns to {}",dns);
+    utils::set_dns(&dns).unwrap();
 
     let poll = mio::Poll::new().unwrap();
     info!("Setting up TUN device for polling.");
@@ -184,7 +187,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
                         Message::Request |
-                        Message::Response { id: _, token: _ } => {
+                        Message::Response { id: _, token: _, dns: _ } => {
                             warn!("Invalid message {:?} from {}", msg, addr);
                         }
                         Message::Data { id: _, token: server_token, data } => {
@@ -231,7 +234,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     }
 }
 
-pub fn serve(port: u16, secret: &str) {
+pub fn serve(port: u16, secret: &str,dns: &str) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }
@@ -307,6 +310,7 @@ pub fn serve(port: u16, secret: &str) {
                             let reply = Message::Response {
                                 id: client_id,
                                 token: client_token,
+                                dns: dns.to_string(),
                             };
                             let encoded_reply = serialize(&reply).unwrap();
                             let mut encrypted_reply = encoded_reply.clone();
@@ -325,7 +329,7 @@ pub fn serve(port: u16, secret: &str) {
                                         .unwrap();
                             }
                         }
-                        Message::Response { id: _, token: _ } => {
+                        Message::Response { id: _, token: _ ,dns: _} => {
                             warn!("Invalid message {:?} from {}", msg, addr)
                         }
                         Message::Data { id, token, data } => {
@@ -410,7 +414,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn integration_test() {
         assert!(utils::is_root());
-        let server = thread::spawn(move || serve(8964, "password"));
+        let server = thread::spawn(move || serve(8964, "password","8.8.8.8"));
 
         thread::sleep_ms(1000);
         assert!(LISTENING.load(Ordering::Relaxed));
@@ -419,7 +423,7 @@ mod tests {
         let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-        let (id, token) = initiate(&local_socket, &remote_addr, "password").unwrap();
+        let (id, token,dbs) = initiate(&local_socket, &remote_addr, "password").unwrap();
         assert_eq!(id, 253);
 
         let client = thread::spawn(move || connect("127.0.0.1", 8964, false, "password"));

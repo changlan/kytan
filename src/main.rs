@@ -68,7 +68,7 @@ fn main() {
     }
 
     match args.mode.as_ref() {
-        "server" => network::serve(args.port, &args.key),
+        "server" => network::serve(args.port, &args.key,&args.dns),
         "client" => {
             network::connect(&args.host, args.port, true, &args.key)
         }

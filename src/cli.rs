@@ -8,6 +8,7 @@ pub struct Args {
     pub port: u16,
     pub host: String,
     pub key: String,
+    pub dns: String,
 }
 
 
@@ -44,6 +45,13 @@ pub fn get_args() -> Result<Args,String> {
                             .long("key")
                             .help("password of your remote server")
                             .takes_value(true))
+                        .arg(Arg::with_name("dns")
+                            .short("d")
+                            .long("dns")
+                            .default_value("8.8.8.8")
+                            .help("set the dns, default value 8.8.8.8")
+                            .takes_value(true)
+                        )
                         .get_matches();
     // if matches.is_present("config") {
     //     let matches = load_yaml!(matches.value_of("config").map_err(|e| e.to_string())?);
@@ -79,6 +87,7 @@ pub fn get_args() -> Result<Args,String> {
         mode: mode.to_string(),
         port: port,
         host: host.to_string(),
-        key: key.to_string()
+        key: key.to_string(),
+        dns: matches.value_of("dns").unwrap().to_string(),
     })
 }
