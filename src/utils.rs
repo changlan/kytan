@@ -228,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn route_test() {
         assert!(is_root());
         let gw = get_default_gateway().unwrap();
