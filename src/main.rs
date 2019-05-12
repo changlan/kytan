@@ -68,7 +68,7 @@ fn main() {
     }
 
     match cli::get_args().unwrap() {
-        cli::Args::Client(client) => network::connect(&client.remote_addr, client.port, true, &client.key),
+        cli::Args::Client(client) => network::connect(&client.remote_addr, client.port, client.default_route, &client.key),
         cli::Args::Server(server) => network::serve(server.port, &server.key, server.dns),
     }
 

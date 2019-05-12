@@ -17,6 +17,7 @@ pub struct Client {
     pub remote_addr: String,
     pub port: u16,
     pub key: String,
+    pub default_route: bool
 }
 
 
@@ -70,6 +71,10 @@ pub fn get_args() -> Result<Args,String> {
                                             .long("key")
                                             .help("set the key for encryption communication")
                                             .takes_value(true))
+                                        .arg(Arg::with_name("no-default-route")
+                                            .short("n")
+                                            .long("no-default-route")
+                                            .help("do not set default route"))
                             ).get_matches();
     if let Some(matches) = matches.subcommand_matches("client"){ 
         let ip_str = matches.value_of("server").ok_or_else(|| "can not find client host value").unwrap();
@@ -77,10 +82,15 @@ pub fn get_args() -> Result<Args,String> {
         let key_str = matches.value_of("key").ok_or_else(|| "can not find client key value").unwrap();
         // let remote_addr = IpAddr::V4(Ipv4Addr::from_str(ip_str).map_err(|e| e.to_string())?);
         let port = port_str.parse::<u16>().map_err(|e| e.to_string())?;
+        let default_route = match matches.is_present("no-default-route"){
+            false => true,
+            true => false
+        };
         Ok(Args::Client(Client{
             remote_addr: ip_str.to_string(),
             port: port,
             key: key_str.to_string(),
+            default_route: default_route
         }))
     } else if let Some(matches) = matches.subcommand_matches("server") {
         let ip_str = matches.value_of("bind").ok_or_else(|| "can not find server host value").unwrap();

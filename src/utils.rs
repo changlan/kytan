@@ -42,8 +42,6 @@ pub fn enable_ipv4_forwarding() -> Result<(), String> {
 }
 
 
-
-
 pub enum RouteType {
     Net,
     Host,
@@ -52,26 +50,32 @@ pub enum RouteType {
 pub struct DefaultGateway {
     origin: String,
     remote: String,
+    default: bool,
 }
 
 impl DefaultGateway {
-    pub fn create(gateway: &str, remote: &str) -> DefaultGateway {
+    pub fn create(gateway: &str, remote: &str,default: bool) -> DefaultGateway {
         let origin = get_default_gateway().unwrap();
         info!("Original default gateway: {}.", origin);
         add_route(RouteType::Host, remote, &origin).unwrap();
-        delete_default_gateway().unwrap();
-        set_default_gateway(gateway).unwrap();
+        if default{
+            delete_default_gateway().unwrap();
+            set_default_gateway(gateway).unwrap();
+        }
         DefaultGateway {
             origin: origin,
             remote: String::from(remote),
+            default: default,
         }
     }
 }
 
 impl Drop for DefaultGateway {
     fn drop(&mut self) {
-        delete_default_gateway().unwrap();
-        set_default_gateway(&self.origin).unwrap();
+        if self.default{
+            delete_default_gateway().unwrap();
+            set_default_gateway(&self.origin).unwrap();
+        }
         delete_route(RouteType::Host, &self.remote).unwrap();
     }
 }
