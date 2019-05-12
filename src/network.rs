@@ -159,11 +159,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     let mut buf = [0u8; 1600];
 
     // RAII so ignore unused variable warning
-    let _gw = if default {
-        Some(utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip())))
-    } else {
-        None
-    };
+    let _gw = utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()),default);
 
     let mut encoder = snap::Encoder::new();
     let mut decoder = snap::Decoder::new();
