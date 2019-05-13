@@ -247,5 +247,4 @@ mod tests {
         assert!(is_root());
         set_dns("8.8.8.8").unwrap();
     }
-
 }
