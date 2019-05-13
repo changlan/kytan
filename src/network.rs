@@ -113,7 +113,7 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let dlen = decrypted_buf.len();
     let resp_msg: Message = deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string())?;
     match resp_msg {
-        Message::Response { id, token,dns } => Ok((id, token,dns)),
+        Message::Response { id, token, dns } => Ok((id, token, dns)),
         _ => Err(format!("Invalid message {:?} from {}", resp_msg, addr)),
     }
 }
@@ -230,7 +230,7 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     }
 }
 
-pub fn serve(port: u16, secret: &str,dns: IpAddr) {
+pub fn serve(port: u16, secret: &str, dns: IpAddr) {
     if cfg!(not(target_os = "linux")) {
         panic!("Server mode is only available in Linux!");
     }
@@ -325,7 +325,7 @@ pub fn serve(port: u16, secret: &str,dns: IpAddr) {
                                         .unwrap();
                             }
                         }
-                        Message::Response { id: _, token: _ ,dns: _} => {
+                        Message::Response { id: _, token: _ , dns: _} => {
                             warn!("Invalid message {:?} from {}", msg, addr)
                         }
                         Message::Data { id, token, data } => {
@@ -410,7 +410,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn integration_test() {
         assert!(utils::is_root());
-        let server = thread::spawn(move || serve(8964, "password","8.8.8.8".parse::<IpAddr>().unwrap()));
+        let server = thread::spawn(move || serve(8964, "password", "8.8.8.8".parse::<IpAddr>().unwrap()));
 
         thread::sleep_ms(1000);
         assert!(LISTENING.load(Ordering::Relaxed));
@@ -419,7 +419,7 @@ mod tests {
         let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-        let (id, token,dbs) = initiate(&local_socket, &remote_addr, "password").unwrap();
+        let (id, token, dns) = initiate(&local_socket, &remote_addr, "password").unwrap();
         assert_eq!(id, 253);
 
         let client = thread::spawn(move || connect("127.0.0.1", 8964, false, "password"));
