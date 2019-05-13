@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 libc = "*"
-getopts = "*"
 mio = "*"
 serde = "*"
 serde_derive = "*"

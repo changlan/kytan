@@ -48,7 +48,6 @@ $ sudo iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o <INTERFACE> -j MASQUER
 To run `kytan` in server mode and listen on UDP port `9527` with password `hello`:
 
 ```
-
 $ sudo ./kytan server -k hello 
 ```
 if you want open log display(`info` is log level,you can change it by your idea)

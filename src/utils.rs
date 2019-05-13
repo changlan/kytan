@@ -54,11 +54,11 @@ pub struct DefaultGateway {
 }
 
 impl DefaultGateway {
-    pub fn create(gateway: &str, remote: &str,default: bool) -> DefaultGateway {
+    pub fn create(gateway: &str, remote: &str, default: bool) -> DefaultGateway {
         let origin = get_default_gateway().unwrap();
         info!("Original default gateway: {}.", origin);
         add_route(RouteType::Host, remote, &origin).unwrap();
-        if default{
+        if default {
             delete_default_gateway().unwrap();
             set_default_gateway(gateway).unwrap();
         }
@@ -242,7 +242,6 @@ mod tests {
         delete_route(RouteType::Host, "1.1.1.1").unwrap();
         assert!(!get_route_gateway("1.1.1.1").unwrap().contains(&*gw));
     }
-    
     #[test]
     fn set_dns_test() {
         assert!(is_root());
