@@ -50,7 +50,7 @@ To run `kytan` in server mode and listen on UDP port `9527` with password `hello
 ```
 $ sudo ./kytan server -k hello 
 ```
-if you want open log display(`info` is log level,you can change it by your idea)
+If you want open log display (`info` is log level, you can change it by your idea)
 
 ```
 $ sudo RUST_LOG=info ./kytan server -k hello 
@@ -64,7 +64,7 @@ To run `kytan` in client mode and connect to the server `<SERVER>:9527` using pa
 $ sudo ./kytan client -s <SERVER> -p 9527 -k hello
 ```
 
-if you want open log display(`info` is log level,you can change it by your idea)
+if you want open log display (`info` is log level, you can change it by your idea)
 
 ```
 $ sudo RUST_LOG=info ./kytan client -s <SERVER> -p 9527 -k hello
