@@ -1,6 +1,6 @@
 [package]
 name = "kytan"
-version = "0.0.2"
+version = "0.1.1"
 authors = ["Chang Lan <me@changlan.org>"]
 edition = "2018"
 
