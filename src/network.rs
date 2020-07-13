@@ -12,40 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{SocketAddr, IpAddr, UdpSocket};
-use std::os::unix::io::AsRawFd;
-use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
-use std::io::{Write, Read};
-use mio;
-use dns_lookup;
-use bincode::{serialize, deserialize};
 use crate::device;
 use crate::utils;
-use snap;
+use bincode::{deserialize, serialize};
+use dns_lookup;
+use log::{info, warn};
+use mio;
 use rand::{thread_rng, Rng};
-use transient_hashmap::TransientHashMap;
-use ring::{aead, pbkdf2, digest};
+use ring::{aead, pbkdf2};
+use serde_derive::{Deserialize, Serialize};
+use snap;
+use std::io::{Read, Write};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::num::NonZeroU32;
-use log::{info,warn};
-use serde_derive::{Serialize,Deserialize};
+use std::os::unix::io::AsRawFd;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time;
+use transient_hashmap::TransientHashMap;
 
-
-pub static INTERRUPTED: AtomicBool = ATOMIC_BOOL_INIT;
-static CONNECTED: AtomicBool = ATOMIC_BOOL_INIT;
-static LISTENING: AtomicBool = ATOMIC_BOOL_INIT;
+pub static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+static CONNECTED: AtomicBool = AtomicBool::new(false);
+static LISTENING: AtomicBool = AtomicBool::new(false);
 const KEY_LEN: usize = 32;
-const TAG_LEN: usize = 16;
-const NONCE: &[u8; 12] = &[0; 12];
 
 type Id = u8;
 type Token = u64;
 
-fn generate_add_nonce(secret: &str) -> (ring::aead::Aad,ring::aead::Nonce){
-    let nonce = aead::Nonce::assume_unique_for_key([0;12]);
+fn generate_add_nonce(secret: &str) -> (aead::Aad<[u8; 0]>, aead::Nonce) {
+    let nonce = aead::Nonce::assume_unique_for_key([0; 12]);
     let aad = aead::Aad::empty();
-    (aad,nonce)
+    (aad, nonce)
 }
-
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 enum Message {
@@ -66,39 +63,49 @@ fn create_tun_attempt() -> device::Tun {
     fn attempt(id: u8) -> device::Tun {
         match id {
             255 => panic!("Unable to create TUN device."),
-            _ => {
-                match device::Tun::create(id) {
-                    Ok(tun) => tun,
-                    Err(_) => attempt(id + 1),
-                }
-            }
+            _ => match device::Tun::create(id) {
+                Ok(tun) => tun,
+                Err(_) => attempt(id + 1),
+            },
         }
     }
     attempt(0)
 }
 
-fn derive_keys(password: &str) -> (aead::SealingKey, aead::OpeningKey) {
+fn derive_keys(password: &str) -> aead::LessSafeKey {
     let mut key = [0; KEY_LEN];
     let salt = vec![0; 64];
     let pbkdf2_iterations: NonZeroU32 = NonZeroU32::new(1024).unwrap();
-    pbkdf2::derive(&digest::SHA256, pbkdf2_iterations, &salt, password.as_bytes(), &mut key);    
-    let sealing_key = aead::SealingKey::new(&aead::AES_256_GCM, &key).unwrap();
-    let opening_key = aead::OpeningKey::new(&aead::AES_256_GCM, &key).unwrap();
-    (sealing_key, opening_key)
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA256,
+        pbkdf2_iterations,
+        &salt,
+        password.as_bytes(),
+        &mut key,
+    );
+    let less_safe_key =
+        aead::LessSafeKey::new(aead::UnboundKey::new(&aead::AES_256_GCM, &key).unwrap());
+    less_safe_key
 }
 
-fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, Token,String), String> {
-    let (sealing_key, opening_key) = derive_keys(secret);
+fn initiate(
+    socket: &UdpSocket,
+    addr: &SocketAddr,
+    secret: &str,
+) -> Result<(Id, Token, String), String> {
+    let key = derive_keys(secret);
     let req_msg = Message::Request;
     let encoded_req_msg: Vec<u8> = serialize(&req_msg).map_err(|e| e.to_string())?;
     let mut encrypted_req_msg = encoded_req_msg.clone();
-    encrypted_req_msg.resize(encoded_req_msg.len() + TAG_LEN, 0);
-    let (aad,nonce) = generate_add_nonce(secret);
-    let mut remaining_len =
-        aead::seal_in_place(&sealing_key, nonce, aad, &mut encrypted_req_msg, TAG_LEN).unwrap();
+    encrypted_req_msg.resize(encoded_req_msg.len() + key.algorithm().tag_len(), 0);
+    let (aad, nonce) = generate_add_nonce(secret);
+    key.seal_in_place_append_tag(nonce, aad, &mut encrypted_req_msg)
+        .unwrap();
 
+    let mut remaining_len = encrypted_req_msg.len();
     while remaining_len > 0 {
-        let sent_bytes = socket.send_to(&encrypted_req_msg, addr)
+        let sent_bytes = socket
+            .send_to(&encrypted_req_msg, addr)
             .map_err(|e| e.to_string())?;
         remaining_len -= sent_bytes;
     }
@@ -108,8 +115,10 @@ fn initiate(socket: &UdpSocket, addr: &SocketAddr, secret: &str) -> Result<(Id, 
     let (len, recv_addr) = socket.recv_from(&mut buf).map_err(|e| e.to_string())?;
     assert_eq!(&recv_addr, addr);
     info!("Response received from {}.", addr);
-    let (aad,nonce) = generate_add_nonce(secret);
-    let decrypted_buf = aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
+
+    let (aad, nonce) = generate_add_nonce(secret);
+    let decrypted_buf = key.open_in_place(nonce, aad, &mut buf[0..len]).unwrap();
+
     let dlen = decrypted_buf.len();
     let resp_msg: Message = deserialize(&decrypted_buf[0..dlen]).map_err(|e| e.to_string())?;
     match resp_msg {
@@ -127,42 +136,53 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
     let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
     let socket = UdpSocket::bind(&local_addr).unwrap();
 
-    let (sealing_key, opening_key) = derive_keys(secret);
+    let key = derive_keys(secret);
 
-    let (id, token,dns) = initiate(&socket, &remote_addr, &secret).unwrap();
-    info!("Session established with token {}. Assigned IP address: 10.10.10.{}. dns: {}",
-          token,
-          id,
-          dns);
+    let (id, token, dns) = initiate(&socket, &remote_addr, &secret).unwrap();
+    info!(
+        "Session established with token {}. Assigned IP address: 10.10.10.{}. dns: {}",
+        token, id, dns
+    );
 
     info!("Bringing up TUN device.");
     let mut tun = create_tun_attempt();
     let tun_rawfd = tun.as_raw_fd();
     tun.up(id);
-    let tunfd = mio::unix::EventedFd(&tun_rawfd);
-    info!("TUN device {} initialized. Internal IP: 10.10.10.{}/24.",
-          tun.name(),
-          id);
+    let mut tunfd = mio::unix::SourceFd(&tun_rawfd);
+    info!(
+        "TUN device {} initialized. Internal IP: 10.10.10.{}/24.",
+        tun.name(),
+        id
+    );
 
-    info!("setting dns to {}",dns);
+    info!("setting dns to {}", dns);
     utils::set_dns(&dns).unwrap();
 
-    let poll = mio::Poll::new().unwrap();
+    let mut poll = mio::Poll::new().unwrap();
     info!("Setting up TUN device for polling.");
-    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
+    poll.registry()
+        .register(
+            &mut tunfd,
+            TUN,
+            mio::Interest::READABLE | mio::Interest::WRITABLE,
+        )
+        .unwrap();
 
     info!("Setting up socket for polling.");
-    let sockfd = mio::net::UdpSocket::from_socket(socket).unwrap();
-    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
+    let mut sockfd = mio::net::UdpSocket::from_std(socket);
+    poll.registry()
+        .register(&mut sockfd, SOCK, mio::Interest::READABLE)
+        .unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
     let mut buf = [0u8; 1600];
 
     // RAII so ignore unused variable warning
-    let _gw = utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()),default);
+    let _gw =
+        utils::DefaultGateway::create("10.10.10.1", &format!("{}", remote_addr.ip()), default);
 
-    let mut encoder = snap::Encoder::new();
-    let mut decoder = snap::Decoder::new();
+    let mut encoder = snap::raw::Encoder::new();
+    let mut decoder = snap::raw::Decoder::new();
 
     CONNECTED.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
@@ -176,29 +196,38 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
-                    let (aad,nonce) = generate_add_nonce(secret);
-                    let decrypted_buf =
-                        aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
+                    let (aad, nonce) = generate_add_nonce(secret);
+
+                    let decrypted_buf = key.open_in_place(nonce, aad, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
-                        Message::Request |
-                        Message::Response { id: _, token: _, dns: _ } => {
+                        Message::Request
+                        | Message::Response {
+                            id: _,
+                            token: _,
+                            dns: _,
+                        } => {
                             warn!("Invalid message {:?} from {}", msg, addr);
                         }
-                        Message::Data { id: _, token: server_token, data } => {
+                        Message::Data {
+                            id: _,
+                            token: server_token,
+                            data,
+                        } => {
                             if token == server_token {
                                 let decompressed_data = decoder.decompress_vec(&data).unwrap();
                                 let data_len = decompressed_data.len();
                                 let mut sent_len = 0;
                                 while sent_len < data_len {
-                                    sent_len += tun.write(&decompressed_data[sent_len..data_len])
-                                        .unwrap();
+                                    sent_len +=
+                                        tun.write(&decompressed_data[sent_len..data_len]).unwrap();
                                 }
                             } else {
-                                warn!("Token mismatched. Received: {}. Expected: {}",
-                                      server_token,
-                                      token);
+                                warn!(
+                                    "Token mismatched. Received: {}. Expected: {}",
+                                    server_token, token
+                                );
                             }
                         }
                     }
@@ -213,14 +242,14 @@ pub fn connect(host: &str, port: u16, default: bool, secret: &str) {
                     };
                     let encoded_msg = serialize(&msg).unwrap();
                     let mut encrypted_msg = encoded_msg.clone();
-                    encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
-                    let (aad,nonce) = generate_add_nonce(secret);
-                    let data_len =
-                        aead::seal_in_place(&sealing_key, nonce, aad, &mut encrypted_msg, TAG_LEN)
-                            .unwrap();
+                    encrypted_msg.resize(encoded_msg.len() + key.algorithm().tag_len(), 0);
+                    let (aad, nonce) = generate_add_nonce(secret);
+                    key.seal_in_place_append_tag(nonce, aad, &mut encrypted_msg)
+                        .unwrap();
                     let mut sent_len = 0;
-                    while sent_len < data_len {
-                        sent_len += sockfd.send_to(&encrypted_msg[sent_len..data_len], &remote_addr)
+                    while sent_len < encrypted_msg.len() {
+                        sent_len += sockfd
+                            .send_to(&encrypted_msg[sent_len..encrypted_msg.len()], remote_addr)
                             .unwrap();
                     }
                 }
@@ -248,17 +277,23 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
     tun.up(1);
 
     let tun_rawfd = tun.as_raw_fd();
-    let tunfd = mio::unix::EventedFd(&tun_rawfd);
-    info!("TUN device {} initialized. Internal IP: 10.10.10.1/24.",
-          tun.name());
+    let mut tunfd = mio::unix::SourceFd(&tun_rawfd);
+    info!(
+        "TUN device {} initialized. Internal IP: 10.10.10.1/24.",
+        tun.name()
+    );
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-    let sockfd = mio::net::UdpSocket::bind(&addr).unwrap();
+    let mut sockfd = mio::net::UdpSocket::bind(addr).unwrap();
     info!("Listening on: 0.0.0.0:{}.", port);
 
-    let poll = mio::Poll::new().unwrap();
-    poll.register(&sockfd, SOCK, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
-    poll.register(&tunfd, TUN, mio::Ready::readable(), mio::PollOpt::level()).unwrap();
+    let mut poll = mio::Poll::new().unwrap();
+    poll.registry()
+        .register(&mut sockfd, SOCK, mio::Interest::READABLE)
+        .unwrap();
+    poll.registry()
+        .register(&mut tunfd, TUN, mio::Interest::READABLE)
+        .unwrap();
 
     let mut events = mio::Events::with_capacity(1024);
 
@@ -267,10 +302,10 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
     let mut client_info: TransientHashMap<Id, (Token, SocketAddr)> = TransientHashMap::new(60);
 
     let mut buf = [0u8; 1600];
-    let mut encoder = snap::Encoder::new();
-    let mut decoder = snap::Decoder::new();
+    let mut encoder = snap::raw::Encoder::new();
+    let mut decoder = snap::raw::Decoder::new();
 
-    let (sealing_key, opening_key) = derive_keys(secret);
+    let key = derive_keys(secret);
 
     LISTENING.store(true, Ordering::Relaxed);
     info!("Ready for transmission.");
@@ -287,9 +322,8 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
             match event.token() {
                 SOCK => {
                     let (len, addr) = sockfd.recv_from(&mut buf).unwrap();
-                    let (aad,nonce) = generate_add_nonce(secret);
-                    let decrypted_buf =
-                        aead::open_in_place(&opening_key, nonce, aad, 0, &mut buf[0..len]).unwrap();
+                    let (aad, nonce) = generate_add_nonce(secret);
+                    let decrypted_buf = key.open_in_place(nonce, aad, &mut buf[0..len]).unwrap();
                     let dlen = decrypted_buf.len();
                     let msg: Message = deserialize(&decrypted_buf[0..dlen]).unwrap();
                     match msg {
@@ -299,9 +333,10 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
 
                             client_info.insert(client_id, (client_token, addr));
 
-                            info!("Got request from {}. Assigning IP address: 10.10.10.{}.",
-                                  addr,
-                                  client_id);
+                            info!(
+                                "Got request from {}. Assigning IP address: 10.10.10.{}.",
+                                addr, client_id
+                            );
 
                             let reply = Message::Response {
                                 id: client_id,
@@ -310,48 +345,47 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
                             };
                             let encoded_reply = serialize(&reply).unwrap();
                             let mut encrypted_reply = encoded_reply.clone();
-                            encrypted_reply.resize(encoded_reply.len() + TAG_LEN, 0);
-                            let (aad,nonce) = generate_add_nonce(secret);
-                            let data_len = aead::seal_in_place(&sealing_key,
-                                                               nonce,
-                                                               aad,
-                                                               &mut encrypted_reply,
-                                                               TAG_LEN)
+                            encrypted_reply
+                                .resize(encoded_reply.len() + key.algorithm().tag_len(), 0);
+                            let (aad, nonce) = generate_add_nonce(secret);
+                            key.seal_in_place_append_tag(nonce, aad, &mut encrypted_reply)
                                 .unwrap();
                             let mut sent_len = 0;
-                            while sent_len < data_len {
-                                sent_len +=
-                                    sockfd.send_to(&encrypted_reply[sent_len..data_len], &addr)
-                                        .unwrap();
+                            while sent_len < encrypted_reply.len() {
+                                sent_len += sockfd
+                                    .send_to(
+                                        &encrypted_reply[sent_len..encrypted_reply.len()],
+                                        addr,
+                                    )
+                                    .unwrap();
                             }
                         }
-                        Message::Response { id: _, token: _ , dns: _} => {
-                            warn!("Invalid message {:?} from {}", msg, addr)
-                        }
-                        Message::Data { id, token, data } => {
-                            match client_info.get(&id) {
-                                None => warn!("Unknown data with token {} from id {}.", token, id),
-                                Some(&(t, _)) => {
-                                    if t != token {
-                                        warn!("Unknown data with mismatched token {} from id {}. \
+                        Message::Response {
+                            id: _,
+                            token: _,
+                            dns: _,
+                        } => warn!("Invalid message {:?} from {}", msg, addr),
+                        Message::Data { id, token, data } => match client_info.get(&id) {
+                            None => warn!("Unknown data with token {} from id {}.", token, id),
+                            Some(&(t, _)) => {
+                                if t != token {
+                                    warn!(
+                                        "Unknown data with mismatched token {} from id {}. \
                                                Expected: {}",
-                                              token,
-                                              id,
-                                              t);
-                                    } else {
-                                        let decompressed_data = decoder.decompress_vec(&data)
+                                        token, id, t
+                                    );
+                                } else {
+                                    let decompressed_data = decoder.decompress_vec(&data).unwrap();
+                                    let data_len = decompressed_data.len();
+                                    let mut sent_len = 0;
+                                    while sent_len < data_len {
+                                        sent_len += tun
+                                            .write(&decompressed_data[sent_len..data_len])
                                             .unwrap();
-                                        let data_len = decompressed_data.len();
-                                        let mut sent_len = 0;
-                                        while sent_len < data_len {
-                                            sent_len +=
-                                                tun.write(&decompressed_data[sent_len..data_len])
-                                                    .unwrap();
-                                        }
                                     }
                                 }
                             }
-                        }
+                        },
                     }
                 }
                 TUN => {
@@ -369,19 +403,15 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
                             };
                             let encoded_msg = serialize(&msg).unwrap();
                             let mut encrypted_msg = encoded_msg.clone();
-                            encrypted_msg.resize(encoded_msg.len() + TAG_LEN, 0);
-                            let (aad,nonce) = generate_add_nonce(secret);
-                            let data_len = aead::seal_in_place(&sealing_key,
-                                                               nonce,
-                                                               aad,
-                                                               &mut encrypted_msg,
-                                                               TAG_LEN)
+                            encrypted_msg.resize(encoded_msg.len() + key.algorithm().tag_len(), 0);
+                            let (aad, nonce) = generate_add_nonce(secret);
+                            key.seal_in_place_append_tag(nonce, aad, &mut encrypted_msg)
                                 .unwrap();
                             let mut sent_len = 0;
-                            while sent_len < data_len {
-                                sent_len +=
-                                    sockfd.send_to(&encrypted_msg[sent_len..data_len], &addr)
-                                        .unwrap();
+                            while sent_len < encrypted_msg.len() {
+                                sent_len += sockfd
+                                    .send_to(&encrypted_msg[sent_len..encrypted_msg.len()], addr)
+                                    .unwrap();
                             }
                         }
                     }
@@ -394,37 +424,40 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
 
 #[cfg(test)]
 mod tests {
-    use std::net::Ipv4Addr;
     use crate::network::*;
+    use std::net::Ipv4Addr;
 
     #[cfg(target_os = "linux")]
     use std::thread;
 
     #[test]
     fn resolve_test() {
-        assert_eq!(resolve("127.0.0.1").unwrap(),
-                   IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(
+            resolve("127.0.0.1").unwrap(),
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+        );
     }
 
     #[test]
     #[cfg(target_os = "linux")]
     fn integration_test() {
         assert!(utils::is_root());
-        let server = thread::spawn(move || serve(8964, "password", "8.8.8.8".parse::<IpAddr>().unwrap()));
+        let _server =
+            thread::spawn(move || serve(8964, "password", "8.8.8.8".parse::<IpAddr>().unwrap()));
 
-        thread::sleep_ms(1000);
+        thread::sleep(time::Duration::from_secs(1));
         assert!(LISTENING.load(Ordering::Relaxed));
 
         let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8964);
         let local_addr: SocketAddr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let local_socket = UdpSocket::bind(&local_addr).unwrap();
 
-        let (id, token, dns) = initiate(&local_socket, &remote_addr, "password").unwrap();
+        let (id, _, _) = initiate(&local_socket, &remote_addr, "password").unwrap();
         assert_eq!(id, 253);
 
-        let client = thread::spawn(move || connect("127.0.0.1", 8964, false, "password"));
+        let _client = thread::spawn(move || connect("127.0.0.1", 8964, false, "password"));
 
-        thread::sleep_ms(1000);
+        thread::sleep(time::Duration::from_secs(1));
         assert!(CONNECTED.load(Ordering::Relaxed));
 
         INTERRUPTED.store(true, Ordering::Relaxed);

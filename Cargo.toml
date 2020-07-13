@@ -1,12 +1,12 @@
 [package]
 name = "kytan"
-version = "0.0.1"
-authors = ["Chang Lan <clan@eecs.berkeley.edu>"]
+version = "0.0.2"
+authors = ["Chang Lan <me@changlan.org>"]
 edition = "2018"
 
 [dependencies]
 libc = "*"
-mio = "*"
+mio = { version = "0.7", features = ["os-util", "os-poll", "udp"] }
 serde = "*"
 serde_derive = "*"
 bincode = "*"

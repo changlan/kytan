@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::process::Command;
 use libc;
-use log::{info,warn};
+use log::info;
+use std::process::Command;
 
 pub fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
@@ -40,7 +40,6 @@ pub fn enable_ipv4_forwarding() -> Result<(), String> {
         Err(format!("sysctl: {}", status))
     }
 }
-
 
 pub enum RouteType {
     Net,
@@ -72,7 +71,7 @@ impl DefaultGateway {
 
 impl Drop for DefaultGateway {
     fn drop(&mut self) {
-        if self.default{
+        if self.default {
             delete_default_gateway().unwrap();
             set_default_gateway(&self.origin).unwrap();
         }
@@ -163,13 +162,12 @@ pub fn get_default_gateway() -> Result<String, String> {
     } else {
         unimplemented!()
     };
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .unwrap();
+    let output = Command::new("bash").arg("-c").arg(cmd).output().unwrap();
     if output.status.success() {
-        Ok(String::from_utf8(output.stdout).unwrap().trim_right().to_string())
+        Ok(String::from_utf8(output.stdout)
+            .unwrap()
+            .trim_right()
+            .to_string())
     } else {
         Err(String::from_utf8(output.stderr).unwrap())
     }
@@ -187,29 +185,22 @@ pub fn get_public_ip() -> Result<String, String> {
     }
 }
 
-fn get_route_gateway(route: &str) -> Result<String,String> {
-    let cmd = format!("ip -4 route list {}",route);
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .unwrap();
+fn get_route_gateway(route: &str) -> Result<String, String> {
+    let cmd = format!("ip -4 route list {}", route);
+    let output = Command::new("bash").arg("-c").arg(cmd).output().unwrap();
     if output.status.success() {
-        Ok(String::from_utf8(output.stdout).unwrap().trim_right().to_string())
+        Ok(String::from_utf8(output.stdout)
+            .unwrap()
+            .trim_right()
+            .to_string())
     } else {
         Err(String::from_utf8(output.stderr).unwrap())
     }
-
 }
 
-
-pub fn set_dns(dns: &str) -> Result<String,String> {
-    let cmd = format!("echo nameserver {} > /etc/resolv.conf",dns);
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .unwrap();
+pub fn set_dns(dns: &str) -> Result<String, String> {
+    let cmd = format!("echo nameserver {} > /etc/resolv.conf", dns);
+    let output = Command::new("bash").arg("-c").arg(cmd).output().unwrap();
     if output.status.success() {
         Ok(String::from_utf8(output.stdout).unwrap())
     } else {

@@ -17,16 +17,16 @@ use std::num::Wrapping;
 
 #[repr(packed)]
 pub struct Ipv4Header {
-    pub version_ihl: u8, // IP version (= 4) + Internet header length
-    pub type_of_service: u8, // Type of service
-    pub total_length: u16, // Total length in octets
-    pub identification: u16, // Identification
+    pub version_ihl: u8,            // IP version (= 4) + Internet header length
+    pub type_of_service: u8,        // Type of service
+    pub total_length: u16,          // Total length in octets
+    pub identification: u16,        // Identification
     pub flags_fragment_offset: u16, // 3-bits Flags + Fragment Offset
-    pub time_to_live: u8, // Time To Live
-    pub protocol: u8, // Protocol
-    pub header_checksum: u16, // Checksum
-    pub source_address: u32, // Source Address
-    pub destination_address: u32, // Destination Address
+    pub time_to_live: u8,           // Time To Live
+    pub protocol: u8,               // Protocol
+    pub header_checksum: u16,       // Checksum
+    pub source_address: u32,        // Source Address
+    pub destination_address: u32,   // Destination Address
 }
 
 #[repr(packed)]
@@ -80,12 +80,16 @@ fn raw_cksum<T>(buf: *const T, len: usize) -> u16 {
 
 pub fn ipv4_cksum(buf: &Ipv4Header) -> u16 {
     let cksum = raw_cksum(buf as *const Ipv4Header, mem::size_of::<Ipv4Header>());
-    if cksum == 0xffff { cksum } else { !cksum }
+    if cksum == 0xffff {
+        cksum
+    } else {
+        !cksum
+    }
 }
 
 #[repr(packed)]
 struct Ipv4PseudoHeader {
-    pub source_address: u32, // Source Address
+    pub source_address: u32,      // Source Address
     pub destination_address: u32, // Destination Address
     pub zero: u8,
     pub protocol: u8,
