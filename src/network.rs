@@ -27,7 +27,7 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::num::NonZeroU32;
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time;
+
 use transient_hashmap::TransientHashMap;
 
 pub static INTERRUPTED: AtomicBool = AtomicBool::new(false);
@@ -38,7 +38,7 @@ const KEY_LEN: usize = 32;
 type Id = u8;
 type Token = u64;
 
-fn generate_add_nonce(secret: &str) -> (aead::Aad<[u8; 0]>, aead::Nonce) {
+fn generate_add_nonce(_secret: &str) -> (aead::Aad<[u8; 0]>, aead::Nonce) {
     let nonce = aead::Nonce::assume_unique_for_key([0; 12]);
     let aad = aead::Aad::empty();
     (aad, nonce)
