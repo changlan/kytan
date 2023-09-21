@@ -166,7 +166,7 @@ pub fn get_default_gateway() -> Result<String, String> {
     if output.status.success() {
         Ok(String::from_utf8(output.stdout)
             .unwrap()
-            .trim_right()
+            .trim_end()
             .to_string())
     } else {
         Err(String::from_utf8(output.stderr).unwrap())
@@ -191,7 +191,7 @@ fn get_route_gateway(route: &str) -> Result<String, String> {
     if output.status.success() {
         Ok(String::from_utf8(output.stdout)
             .unwrap()
-            .trim_right()
+            .trim_end()
             .to_string())
     } else {
         Err(String::from_utf8(output.stderr).unwrap())

@@ -1,8 +1,8 @@
 use clap;
-use clap::{App, Arg, Error, SubCommand};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use clap::{App, Arg, SubCommand};
+use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
-use std::{ffi::OsString, path::PathBuf};
+
 
 #[derive(Debug, Clone)]
 pub struct Server {
