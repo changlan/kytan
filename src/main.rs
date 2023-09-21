@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod device;
-mod utils;
-mod network;
-mod packet;
-mod cli;
+extern crate kytan;
+
+use kytan::common::utils;
+use kytan::network::network;
+use kytan::cmd::cli;
 
 
 use std::sync::atomic::Ordering;

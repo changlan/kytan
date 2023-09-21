@@ -210,7 +210,7 @@ pub fn set_dns(dns: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::*;
+    use crate::common::utils::*;
 
     #[test]
     fn enable_ipv4_forwarding_test() {
