@@ -4,6 +4,10 @@ version = "0.1.1"
 authors = ["Chang Lan <me@changlan.org>"]
 edition = "2018"
 
+[[bin]]
+name = "kytan"
+path = "src/main.rs"
+
 [dependencies]
 libc = "*"
 mio = { version = "0.7", features = ["os-util", "os-poll", "udp"] }

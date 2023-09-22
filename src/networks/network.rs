@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::device;
-use crate::utils;
+use crate::device::device;
+use crate::common::utils;
 use bincode::{deserialize, serialize};
 use dns_lookup;
 use log::{info, warn};
@@ -424,7 +424,7 @@ pub fn serve(port: u16, secret: &str, dns: IpAddr) {
 
 #[cfg(test)]
 mod tests {
-    use crate::network::*;
+    use super::*;
     use std::net::Ipv4Addr;
 
     #[cfg(target_os = "linux")]
