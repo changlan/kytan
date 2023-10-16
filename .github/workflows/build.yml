@@ -1,0 +1,26 @@
+---
+name: Build
+
+concurrency:
+  group: rust-build-${{ github.head_ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+
+jobs:
+  update_dependency:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Build
+        run: nix build
